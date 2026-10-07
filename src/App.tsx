@@ -1,49 +1,58 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { WeevilCanvas } from './components/WeevilCanvas';
 import { GameHUD } from './components/GameHUD';
 import { VictoryModal } from './components/VictoryModal';
 import { SettingsModal } from './components/SettingsModal';
 import { RiceKnowledgeModal } from './components/RiceKnowledgeModal';
+import { SpriteModal } from './components/SpriteModal';
 import { GameDifficulty, DifficultyConfig } from './types/game';
 import { soundManager } from './audio/soundManager';
-
-const DIFFICULTIES: Record<GameDifficulty, DifficultyConfig> = {
-  easy: {
-    name: 'มือใหม่หัดจับมอด',
-    count: 25,
-    description: 'เหมาะสำหรับเด็กหรือผู้เริ่มเล่น มอดกระจายตัวโปร่งสบาย',
-    speedMultiplier: 0.9,
-  },
-  normal: {
-    name: 'กระสอบทั่วไป (ต้นฉบับ)',
-    count: 45,
-    description: 'จำนวนมอดมาตรฐาน 45 ตัวตามเกมดั้งเดิมกำลังสนุก',
-    speedMultiplier: 1.0,
-  },
-  hard: {
-    name: 'มอดบุกกระสอบ',
-    count: 70,
-    description: 'มอดหนาแน่นขึ้น วิ่งเร็วขึ้น ท้าทายความไวของนิ้ว',
-    speedMultiplier: 1.2,
-  },
-  extreme: {
-    name: 'ฝูงมอดดุเดือด (Frenzy)',
-    count: 100,
-    description: 'กระสอบข้าวสารแตก! มอด 100 ตัวเบียดเสียด วิ่งพล่าน',
-    speedMultiplier: 1.35,
-  },
-};
+import { translations, Language } from './i18n/translations';
+import { spriteEngine } from './utils/spriteEngine';
+import { Sparkles, Upload } from 'lucide-react';
 
 const DIFFICULTY_ORDER: GameDifficulty[] = ['easy', 'normal', 'hard', 'extreme'];
 
 export default function App() {
+  const [language, setLanguage] = useState<Language>('en');
+  const t = translations[language];
+
+  const difficulties: Record<GameDifficulty, DifficultyConfig> = useMemo(() => {
+    return {
+      easy: {
+        name: t.difficultyEasyName,
+        count: 25,
+        description: t.difficultyEasyDesc,
+        speedMultiplier: 0.9,
+      },
+      normal: {
+        name: t.difficultyNormalName,
+        count: 45,
+        description: t.difficultyNormalDesc,
+        speedMultiplier: 1.0,
+      },
+      hard: {
+        name: t.difficultyHardName,
+        count: 70,
+        description: t.difficultyHardDesc,
+        speedMultiplier: 1.2,
+      },
+      extreme: {
+        name: t.difficultyExtremeName,
+        count: 100,
+        description: t.difficultyExtremeDesc,
+        speedMultiplier: 1.35,
+      },
+    };
+  }, [t]);
+
   const [isLoading, setIsLoading] = useState(true);
   const [difficulty, setDifficulty] = useState<GameDifficulty>('normal');
   const [gameKey, setGameKey] = useState(0);
 
   // Counters
-  const [remainingCount, setRemainingCount] = useState(DIFFICULTIES.normal.count);
-  const [totalCount, setTotalCount] = useState(DIFFICULTIES.normal.count);
+  const [remainingCount, setRemainingCount] = useState(45);
+  const [totalCount, setTotalCount] = useState(45);
   const [combo, setCombo] = useState(0);
   const [isMuted, setIsMuted] = useState(soundManager.isMuted);
 
@@ -56,6 +65,11 @@ export default function App() {
   const [showVictory, setShowVictory] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showKnowledge, setShowKnowledge] = useState(false);
+  const [showSpriteModal, setShowSpriteModal] = useState(false);
+
+  // Drag & drop indicator
+  const [isWindowDragging, setIsWindowDragging] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Victory Stats
   const [victoryStats, setVictoryStats] = useState({
@@ -95,9 +109,49 @@ export default function App() {
     return () => clearTimeout(timer);
   }, []);
 
+  // Global drag & drop for spritesheet file
+  useEffect(() => {
+    const handleDragOver = (e: DragEvent) => {
+      e.preventDefault();
+      setIsWindowDragging(true);
+    };
+
+    const handleDragLeave = (e: DragEvent) => {
+      if (e.clientX <= 0 || e.clientY <= 0) {
+        setIsWindowDragging(false);
+      }
+    };
+
+    const handleDrop = async (e: DragEvent) => {
+      e.preventDefault();
+      setIsWindowDragging(false);
+      if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]) {
+        const file = e.dataTransfer.files[0];
+        if (file.type.startsWith('image/')) {
+          const success = await spriteEngine.loadFromFile(file);
+          if (success) {
+            setToastMessage(language === 'en' ? 'Spritesheet loaded successfully!' : 'โหลดสไปร์ทชีทสำเร็จแล้ว!');
+            setTimeout(() => setToastMessage(null), 3000);
+            setGameKey((k) => k + 1);
+          }
+        }
+      }
+    };
+
+    window.addEventListener('dragover', handleDragOver);
+    window.addEventListener('dragleave', handleDragLeave);
+    window.addEventListener('drop', handleDrop);
+
+    return () => {
+      window.removeEventListener('dragover', handleDragOver);
+      window.removeEventListener('dragleave', handleDragLeave);
+      window.removeEventListener('drop', handleDrop);
+    };
+  }, [language]);
+
   // Timer interval
   useEffect(() => {
-    if (isPlaying && !showVictory && !showSettings && !showKnowledge) {
+    if (isPlaying && !showVictory && !showSettings && !showKnowledge && !showSpriteModal) {
       const startTimestamp = performance.now() - elapsedTime * 1000;
       timerRef.current = window.setInterval(() => {
         const sec = (performance.now() - startTimestamp) / 1000;
@@ -110,25 +164,27 @@ export default function App() {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [isPlaying, showVictory, showSettings, showKnowledge, elapsedTime]);
+  }, [isPlaying, showVictory, showSettings, showKnowledge, showSpriteModal, elapsedTime]);
 
   // Restart game
   const handleRestart = useCallback(() => {
+    const count = difficulties[difficulty].count;
     setShowVictory(false);
-    setRemainingCount(DIFFICULTIES[difficulty].count);
-    setTotalCount(DIFFICULTIES[difficulty].count);
+    setRemainingCount(count);
+    setTotalCount(count);
     setCombo(0);
     setElapsedTime(0);
     setIsPlaying(true);
     setGameKey((k) => k + 1);
-  }, [difficulty]);
+  }, [difficulty, difficulties]);
 
   // Difficulty change
   const handleSelectDifficulty = (newDiff: GameDifficulty) => {
     setDifficulty(newDiff);
     setShowSettings(false);
-    setRemainingCount(DIFFICULTIES[newDiff].count);
-    setTotalCount(DIFFICULTIES[newDiff].count);
+    const count = difficulties[newDiff].count;
+    setRemainingCount(count);
+    setTotalCount(count);
     setCombo(0);
     setElapsedTime(0);
     setIsPlaying(true);
@@ -139,6 +195,11 @@ export default function App() {
   const handleToggleMute = () => {
     const muted = soundManager.toggleMute();
     setIsMuted(muted);
+  };
+
+  // Language toggle
+  const handleToggleLanguage = () => {
+    setLanguage((prev) => (prev === 'en' ? 'th' : 'en'));
   };
 
   // Count update callback
@@ -198,7 +259,7 @@ export default function App() {
 
   return (
     <div className="relative w-screen h-screen overflow-hidden select-none bg-[#1a0d05] font-['Kanit',sans-serif]">
-      {/* Loading Screen from original source */}
+      {/* Loading Screen */}
       {isLoading && (
         <div
           id="loading-screen"
@@ -206,19 +267,44 @@ export default function App() {
         >
           <div className="animate-pulse mb-4 text-6xl">🌾🐜👻🌾</div>
           <h1 className="text-2xl font-extrabold text-amber-100 tracking-wider text-center px-4">
-            กำลังเทข้าวสารแบบเต็มกระสอบ...
+            {t.loadingTitle}
           </h1>
           <p className="text-amber-200/60 mt-2 text-xs text-center">
-            จัดวางตำแหน่งตัวมอดและระบบวิญญาณเรืองแสงสว่างจ้า
+            {t.loadingSubtitle}
           </p>
+        </div>
+      )}
+
+      {/* Drag & drop overlay */}
+      {isWindowDragging && (
+        <div className="absolute inset-0 bg-amber-950/80 backdrop-blur-md z-50 flex flex-col items-center justify-center border-4 border-dashed border-amber-400 p-8 text-center pointer-events-none">
+          <Upload className="w-16 h-16 text-amber-300 animate-bounce mb-3" />
+          <h2 className="text-2xl font-black text-amber-100">
+            {language === 'en' ? 'Drop Spritesheet Image Here' : 'ปล่อยไฟล์รูปสไปร์ทชีทที่นี่'}
+          </h2>
+          <p className="text-amber-300/80 text-sm mt-1">
+            {language === 'en'
+              ? '4x2 grid of 8 walk animation frames (white background is auto-removed)'
+              : 'ตาราง 4x2 รวม 8 เฟรมแอนิเมชัน (ลบพื้นหลังขาวอัตโนมัติ)'}
+          </p>
+        </div>
+      )}
+
+      {/* Floating toast notification */}
+      {toastMessage && (
+        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-50 bg-black/80 backdrop-blur-md border border-amber-400/50 text-amber-200 px-4 py-2 rounded-2xl shadow-2xl flex items-center gap-2 text-xs md:text-sm animate-in fade-in slide-in-from-bottom-4 duration-300">
+          <Sparkles className="w-4 h-4 text-amber-400" />
+          <span>{toastMessage}</span>
         </div>
       )}
 
       {/* Main Fullscreen Canvas Game Engine */}
       <WeevilCanvas
         key={gameKey}
-        totalCount={DIFFICULTIES[difficulty].count}
-        isPaused={showSettings || showKnowledge}
+        totalCount={difficulties[difficulty].count}
+        ascendedText={t.canvasAscended}
+        comboPrefix={t.canvasCombo}
+        isPaused={showSettings || showKnowledge || showSpriteModal}
         onCountChange={handleCountChange}
         onVictory={handleVictory}
         onHit={handleHit}
@@ -232,20 +318,25 @@ export default function App() {
         elapsedTime={elapsedTime}
         combo={combo}
         isMuted={isMuted}
+        language={language}
+        t={t}
         onRestart={handleRestart}
         onToggleMute={handleToggleMute}
+        onToggleLanguage={handleToggleLanguage}
         onOpenSettings={() => setShowSettings(true)}
         onOpenKnowledge={() => setShowKnowledge(true)}
+        onOpenSprite={() => setShowSpriteModal(true)}
       />
 
       {/* Victory Modal */}
       <VictoryModal
         isOpen={showVictory}
-        totalWeevils={DIFFICULTIES[difficulty].count}
+        totalWeevils={difficulties[difficulty].count}
         elapsedTime={victoryStats.elapsed}
         maxCombo={victoryStats.maxCombo}
         accuracy={victoryStats.accuracy}
         bestTime={bestRecords[difficulty]}
+        t={t}
         onPlayAgain={handleRestart}
         onNextDifficulty={handleNextDifficulty}
         hasNextDifficulty={hasNextDifficulty}
@@ -255,18 +346,31 @@ export default function App() {
       <SettingsModal
         isOpen={showSettings}
         currentDifficulty={difficulty}
-        difficulties={DIFFICULTIES}
+        difficulties={difficulties}
         isMuted={isMuted}
         bestRecords={bestRecords}
+        language={language}
+        t={t}
         onSelectDifficulty={handleSelectDifficulty}
         onToggleMute={handleToggleMute}
+        onSelectLanguage={(lang) => setLanguage(lang)}
         onClose={() => setShowSettings(false)}
       />
 
       {/* Fun Facts & Rice Weevil Knowledge Modal */}
       <RiceKnowledgeModal
         isOpen={showKnowledge}
+        t={t}
         onClose={() => setShowKnowledge(false)}
+      />
+
+      {/* Spritesheet Viewer & Uploader Modal */}
+      <SpriteModal
+        isOpen={showSpriteModal}
+        language={language}
+        t={t}
+        onClose={() => setShowSpriteModal(false)}
+        onSpriteUpdated={() => setGameKey((k) => k + 1)}
       />
     </div>
   );

@@ -1,5 +1,6 @@
 import React from 'react';
-import { Trophy, Clock, Zap, Target, Star, RotateCcw, ArrowRight } from 'lucide-react';
+import { Clock, Zap, Target, Star, RotateCcw, ArrowRight } from 'lucide-react';
+import { TranslationStrings } from '../i18n/translations';
 
 interface VictoryModalProps {
   isOpen: boolean;
@@ -8,6 +9,7 @@ interface VictoryModalProps {
   maxCombo: number;
   accuracy: number;
   bestTime: number | null;
+  t: TranslationStrings;
   onPlayAgain: () => void;
   onNextDifficulty?: () => void;
   hasNextDifficulty?: boolean;
@@ -20,6 +22,7 @@ export const VictoryModal: React.FC<VictoryModalProps> = ({
   maxCombo,
   accuracy,
   bestTime,
+  t,
   onPlayAgain,
   onNextDifficulty,
   hasNextDifficulty,
@@ -27,7 +30,7 @@ export const VictoryModal: React.FC<VictoryModalProps> = ({
   if (!isOpen) return null;
 
   const formatSecs = (sec: number) => {
-    return `${sec.toFixed(1)} วิ`;
+    return `${sec.toFixed(1)} ${t.victorySecUnit}`;
   };
 
   // Determine star rank
@@ -48,15 +51,13 @@ export const VictoryModal: React.FC<VictoryModalProps> = ({
         <div className="absolute -bottom-16 -right-16 w-36 h-36 bg-cyan-400/20 rounded-full blur-3xl pointer-events-none" />
 
         <div className="text-5xl md:text-6xl mb-2 animate-bounce">🌾🏆✨</div>
-        
+
         <h2 className="text-2xl md:text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-amber-200 via-amber-300 to-amber-400">
-          กำจัดมอดหมดเกลี้ยง!
+          {t.victoryTitle}
         </h2>
-        
+
         <p className="text-amber-100/90 mt-1.5 text-xs md:text-sm">
-          คุณช่วยส่งวิญญาณมอดทั้งหมด{' '}
-          <span className="font-bold text-amber-300 text-base">{totalWeevils}</span> ตัว
-          ไปสู่สุคติแล้ว!
+          {t.victorySubtitle(totalWeevils)}
         </p>
 
         {/* Stars rating */}
@@ -77,36 +78,36 @@ export const VictoryModal: React.FC<VictoryModalProps> = ({
         <div className="grid grid-cols-3 gap-2 bg-black/40 border border-amber-500/20 rounded-2xl p-3 my-3">
           <div className="flex flex-col items-center">
             <span className="text-amber-400/80 text-[10px] md:text-xs flex items-center gap-1">
-              <Clock className="w-3 h-3" /> เวลา
+              <Clock className="w-3 h-3" /> {t.victoryTime}
             </span>
             <span className="text-white font-mono font-bold text-xs md:text-sm mt-0.5">
               {formatSecs(elapsedTime)}
             </span>
             {isNewBest && (
               <span className="text-[9px] bg-emerald-500/20 text-emerald-300 px-1.5 py-0.2 rounded-full mt-0.5 font-semibold">
-                สถิติใหม่!
+                {t.victoryNewBest}
               </span>
             )}
           </div>
 
           <div className="flex flex-col items-center border-x border-amber-500/20">
             <span className="text-amber-400/80 text-[10px] md:text-xs flex items-center gap-1">
-              <Zap className="w-3 h-3" /> คอมโบ
+              <Zap className="w-3 h-3" /> {t.victoryCombo}
             </span>
             <span className="text-white font-mono font-bold text-xs md:text-sm mt-0.5">
               x{maxCombo}
             </span>
-            <span className="text-[9px] text-zinc-400 mt-0.5">ต่อเนื่อง</span>
+            <span className="text-[9px] text-zinc-400 mt-0.5">{t.victoryComboSub}</span>
           </div>
 
           <div className="flex flex-col items-center">
             <span className="text-amber-400/80 text-[10px] md:text-xs flex items-center gap-1">
-              <Target className="w-3 h-3" /> ความแม่นยำ
+              <Target className="w-3 h-3" /> {t.victoryAccuracy}
             </span>
             <span className="text-white font-mono font-bold text-xs md:text-sm mt-0.5">
               {accuracy}%
             </span>
-            <span className="text-[9px] text-zinc-400 mt-0.5">แตะโดน</span>
+            <span className="text-[9px] text-zinc-400 mt-0.5">{t.victoryAccuracySub}</span>
           </div>
         </div>
 
@@ -117,7 +118,7 @@ export const VictoryModal: React.FC<VictoryModalProps> = ({
             className="flex-1 flex items-center justify-center gap-1.5 bg-gradient-to-r from-amber-600 to-amber-800 hover:from-amber-500 hover:to-amber-700 font-bold py-2.5 px-4 rounded-xl shadow-lg transition duration-200 active:scale-95 text-xs md:text-sm text-white border border-amber-400/30"
           >
             <RotateCcw className="w-4 h-4" />
-            <span>เริ่มใหม่อีกครั้ง 🌾</span>
+            <span>{t.victoryPlayAgain}</span>
           </button>
 
           {hasNextDifficulty && (
@@ -125,7 +126,7 @@ export const VictoryModal: React.FC<VictoryModalProps> = ({
               onClick={onNextDifficulty}
               className="flex-1 flex items-center justify-center gap-1.5 bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-500 hover:to-teal-600 font-bold py-2.5 px-4 rounded-xl shadow-lg transition duration-200 active:scale-95 text-xs md:text-sm text-white border border-emerald-400/30"
             >
-              <span>ด่านท้าทายขึ้น</span>
+              <span>{t.victoryNextDiff}</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           )}

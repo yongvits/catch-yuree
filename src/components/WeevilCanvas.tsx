@@ -1,10 +1,13 @@
 import React, { useEffect, useRef, useCallback } from 'react';
 import { RiceGrain, Weevil, Ghost, Particle, FloatingText } from '../types/game';
 import { soundManager } from '../audio/soundManager';
+import { spriteEngine } from '../utils/spriteEngine';
 
 interface WeevilCanvasProps {
   totalCount: number;
   isPaused?: boolean;
+  ascendedText?: string;
+  comboPrefix?: string;
   onCountChange: (remaining: number, total: number) => void;
   onVictory: (elapsedSeconds: number, comboMax: number, accuracy: number) => void;
   onHit?: (combo: number) => void;
@@ -14,6 +17,8 @@ interface WeevilCanvasProps {
 export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
   totalCount,
   isPaused = false,
+  ascendedText = 'Ascended ✨',
+  comboPrefix = 'Combo x',
   onCountChange,
   onVictory,
   onHit,
@@ -203,7 +208,7 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
         vy: (Math.random() - 0.5) * 1.2,
         baseSpeed: 0.35 + Math.random() * 0.55,
         scurryTimer: 0,
-        size: 10 + Math.random() * 4,
+        size: 13 + Math.random() * 4,
         rotation: Math.random() * Math.PI * 2,
         legsPhase: Math.random() * 100,
         opacity: 1,
@@ -229,99 +234,19 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
     onCountChange(count, count);
   }, [onCountChange]);
 
-  // 5. Draw normal alive weevil
+  // 5. Draw animated weevil using the 8-frame character spritesheet
   const drawWeevil = (ctx: CanvasRenderingContext2D, w: Weevil) => {
-    ctx.save();
-    ctx.translate(w.x, w.y);
-    ctx.rotate(w.rotation);
-    ctx.scale(w.scale, w.scale);
-    ctx.globalAlpha = w.opacity;
-
-    const size = w.size;
-
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.45)';
-    ctx.shadowBlur = 4;
-    ctx.shadowOffsetX = 1.5;
-    ctx.shadowOffsetY = 2.5;
-
-    // Legs
-    ctx.strokeStyle = '#1b0d05';
-    ctx.lineWidth = size * 0.12;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-
-    const legWiggle = Math.sin(w.legsPhase) * 0.45;
-
-    for (let i = -1; i <= 1; i += 2) {
-      ctx.beginPath();
-      ctx.moveTo(0, -size * 0.1);
-      ctx.lineTo(i * size * 0.8, -size * 0.45 + legWiggle * i);
-      ctx.stroke();
-
-      ctx.beginPath();
-      ctx.moveTo(0, 0);
-      ctx.lineTo(i * size * 0.9, legWiggle * -i);
-      ctx.stroke();
-
-      ctx.beginPath();
-      ctx.moveTo(0, size * 0.25);
-      ctx.lineTo(i * size * 0.8, size * 0.55 + legWiggle * i);
-      ctx.stroke();
-    }
-
-    ctx.shadowColor = 'transparent';
-
-    // Abdomen (ท้อง)
-    ctx.fillStyle = '#5c2d16';
-    ctx.beginPath();
-    ctx.ellipse(0, size * 0.15, size * 0.45, size * 0.65, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Abdomen segment stripes (รอยปล้องท้อง)
-    ctx.strokeStyle = '#32180b';
-    ctx.lineWidth = size * 0.055;
-    for (let offset = -0.1; offset <= 0.5; offset += 0.25) {
-      ctx.beginPath();
-      ctx.arc(0, size * (offset - 0.1), size * 0.38, 0.1, Math.PI - 0.1);
-      ctx.stroke();
-    }
-
-    // Thorax (อก)
-    ctx.fillStyle = '#3a1c0e';
-    ctx.beginPath();
-    ctx.ellipse(0, -size * 0.35, size * 0.35, size * 0.3, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Head (ส่วนหัว)
-    ctx.fillStyle = '#210f07';
-    ctx.beginPath();
-    ctx.ellipse(0, -size * 0.62, size * 0.18, size * 0.18, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Snout / Rostrum (งวงเจาะข้าวสาร)
-    ctx.strokeStyle = '#210f07';
-    ctx.lineWidth = size * 0.09;
-    ctx.beginPath();
-    ctx.moveTo(0, -size * 0.68);
-    ctx.lineTo(0, -size * 1.25);
-    ctx.stroke();
-
-    // Elbowed Antennae (หนวดแบบหักข้อศอกของมอดงวง)
-    ctx.lineWidth = size * 0.045;
-    ctx.strokeStyle = '#3a1c0e';
-    ctx.beginPath();
-    ctx.moveTo(-size * 0.04, -size * 0.85);
-    ctx.lineTo(-size * 0.25, -size * 0.95);
-    ctx.lineTo(-size * 0.32, -size * 0.78);
-    ctx.stroke();
-
-    ctx.beginPath();
-    ctx.moveTo(size * 0.04, -size * 0.85);
-    ctx.lineTo(size * 0.25, -size * 0.95);
-    ctx.lineTo(size * 0.32, -size * 0.78);
-    ctx.stroke();
-
-    ctx.restore();
+    const frameIndex = Math.floor(w.legsPhase) % 8;
+    spriteEngine.drawFrame(
+      ctx,
+      frameIndex,
+      w.x,
+      w.y,
+      w.size,
+      w.rotation,
+      w.opacity,
+      w.scale
+    );
   };
 
   // 6. Draw bright glowing ghost ascending with 3D zoom
@@ -366,6 +291,17 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
     ctx.moveTo(0, -size * 0.68);
     ctx.lineTo(0, -size * 1.25);
     ctx.stroke();
+
+    // Luminous pink fluffy bows matching character
+    ctx.fillStyle = 'rgba(255, 105, 180, 0.88)';
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = size * 0.04;
+    [-1, 1].forEach((side) => {
+      ctx.beginPath();
+      ctx.arc(side * size * 0.35, -size * 0.15, size * 0.16, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    });
 
     // Translucent fairy angel wings
     ctx.shadowColor = 'transparent';
@@ -486,9 +422,9 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
           // Floating text
           if (stateRef.current.combo > 1) {
             soundManager.playCombo(stateRef.current.combo);
-            addFloatingText(w.x, w.y, `Combo x${stateRef.current.combo}!`, '#38bdf8');
+            addFloatingText(w.x, w.y, `${comboPrefix}${stateRef.current.combo}!`, '#38bdf8');
           } else {
-            addFloatingText(w.x, w.y, 'สู่สุคติ ✨', '#fef08a');
+            addFloatingText(w.x, w.y, ascendedText, '#fef08a');
           }
 
           // Released ghost
@@ -662,7 +598,7 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
             const currentSpeed = Math.hypot(w.vx, w.vy);
             if (currentSpeed > 0.05) {
               w.legsPhase += currentSpeed * 0.45;
-              w.rotation = Math.atan2(w.vy, w.vx) + Math.PI / 2;
+              w.rotation = Math.atan2(w.vy, w.vx) - Math.PI / 2;
             }
 
             w.x += w.vx;
