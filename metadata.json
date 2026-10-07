@@ -1,0 +1,6 @@
+{
+  "name": "เกมจับมอดในกระสอบข้าวสาร (Weevil Catcher)",
+  "description": "เกมจับมอดและส่งวิญญาณมอดในกระสอบข้าวสาร ฟิสิกส์ข้าวสาร 2 ชั้น เสียงและเอฟเฟกต์วิญญาณเรืองแสง",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
