@@ -127,13 +127,14 @@ export const GameHUD: React.FC<GameHUDProps> = ({
               {t.hudSettingsBtn}
             </button>
 
-            {/* Sprite Sheet Manager */}
+            {/* Sprite Sheet Manager / Upload Custom Skin */}
             <button
               onClick={onOpenSprite}
-              title={language === 'en' ? 'Weevil Character Spritesheet' : 'สไปร์ทชีทตัวมอด'}
-              className="bg-black/75 hover:bg-amber-900/80 active:scale-95 border border-white/10 px-3 py-1.5 rounded-full shadow-lg text-pink-300 hover:text-white transition text-xs font-medium"
+              title={language === 'en' ? 'Upload Spritesheet / Character Skins' : 'อัปโหลดรูปภาพตัวมอด / จัดการสกิน'}
+              className="bg-amber-950/80 hover:bg-amber-800/90 active:scale-95 border border-amber-500/50 px-3 py-1.5 rounded-full shadow-lg text-amber-200 hover:text-white transition text-xs font-semibold flex items-center gap-1"
             >
-              {t.hudSpriteBtn}
+              <span className="text-pink-300">🎨</span>
+              <span>{t.hudSpriteBtn}</span>
             </button>
 
             {/* Fun Facts / Rice Storage tips */}

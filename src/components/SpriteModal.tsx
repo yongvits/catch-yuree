@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { X, Upload, RotateCcw, Check, Sliders, Ghost as GhostIcon, Bug } from 'lucide-react';
+import { X, Upload, RotateCcw, Check, Sliders, Ghost as GhostIcon, Bug, Loader2, Sparkles, HelpCircle } from 'lucide-react';
 import { spriteEngine } from '../utils/spriteEngine';
 import { TranslationStrings, Language } from '../i18n/translations';
 
@@ -20,9 +20,11 @@ export const SpriteModal: React.FC<SpriteModalProps> = ({
   const [activeFrame, setActiveFrame] = useState(0);
   const [hasCustom, setHasCustom] = useState(spriteEngine.hasCustomSprite());
   const [isDragging, setIsDragging] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [statusMsg, setStatusMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [showGuide, setShowGuide] = useState(false);
   const [lengthScale, setLengthScale] = useState(spriteEngine.getLengthScale());
-  const [previewMode, setPreviewMode] = useState<'alive' | 'ghost'>('ghost'); // Default shows ghost to let user see the new ghost palette immediately!
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [previewMode, setPreviewMode] = useState<'alive' | 'ghost'>('ghost'); // Default shows ghost to let user see ghost palette
   const previewCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
   // Sync length scale on open
@@ -30,6 +32,7 @@ export const SpriteModal: React.FC<SpriteModalProps> = ({
     if (isOpen) {
       setLengthScale(spriteEngine.getLengthScale());
       setHasCustom(spriteEngine.hasCustomSprite());
+      setStatusMsg(null);
     }
   }, [isOpen]);
 
@@ -102,7 +105,7 @@ export const SpriteModal: React.FC<SpriteModalProps> = ({
         centerY,
         27,
         0,
-        0.72, // Reduced opacity (โปร่งแสง)
+        0.72,
         1.0,
         true
       );
@@ -124,12 +127,38 @@ export const SpriteModal: React.FC<SpriteModalProps> = ({
 
   if (!isOpen) return null;
 
+  const isEn = language === 'en';
+
   const handleFileUpload = async (file: File) => {
-    if (!file.type.startsWith('image/')) return;
-    const ok = await spriteEngine.loadFromFile(file);
-    if (ok) {
-      setHasCustom(true);
-      onSpriteUpdated();
+    setIsProcessing(true);
+    setStatusMsg(null);
+
+    try {
+      const res = await spriteEngine.loadFromFile(file);
+      if (res.success) {
+        setHasCustom(true);
+        setStatusMsg({
+          type: 'success',
+          text: isEn
+            ? '✓ Character sprite updated & saved permanently!'
+            : '✓ อัปเดตรูปตัวมอดสำเร็จ! บันทึกลงเครื่องถาวรแล้ว',
+        });
+        onSpriteUpdated();
+      } else {
+        setStatusMsg({
+          type: 'error',
+          text: isEn
+            ? `Upload failed: ${res.error || 'Please use an 8-frame 4x2 spritesheet image'}`
+            : `ไม่สามารถนำเข้ารูปได้: ${res.error || 'กรุณาใช้รูปภาพที่มี 8 เฟรม (4 คอลัมน์ x 2 แถว)'}`,
+        });
+      }
+    } catch (err: any) {
+      setStatusMsg({
+        type: 'error',
+        text: err?.message || (isEn ? 'Failed to process image' : 'เกิดข้อผิดพลาดในการประมวลผลรูปภาพ'),
+      });
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -141,10 +170,14 @@ export const SpriteModal: React.FC<SpriteModalProps> = ({
     }
   };
 
-  const handleReset = () => {
-    spriteEngine.resetToDefault();
+  const handleReset = async () => {
+    await spriteEngine.resetToDefault();
     setHasCustom(false);
     setLengthScale(1.0);
+    setStatusMsg({
+      type: 'success',
+      text: isEn ? 'Reset to default character' : 'รีเซ็ตกลับเป็นตัวมอดเริ่มต้นแล้ว',
+    });
     onSpriteUpdated();
   };
 
@@ -153,8 +186,6 @@ export const SpriteModal: React.FC<SpriteModalProps> = ({
     spriteEngine.setLengthScale(val);
     onSpriteUpdated();
   };
-
-  const isEn = language === 'en';
 
   return (
     <div className="fixed inset-0 bg-black/85 backdrop-blur-sm flex justify-center items-center z-50 p-4">
@@ -165,7 +196,7 @@ export const SpriteModal: React.FC<SpriteModalProps> = ({
             <span className="text-2xl">🎨</span>
             <div>
               <h3 className="font-extrabold text-base md:text-lg text-amber-200">
-                {isEn ? 'Weevil Spritesheet Character' : 'สไปร์ทชีทตัวมอด (Sprite Sheet)'}
+                {isEn ? 'Weevil Character / Spritesheet' : 'ตัวละครมอด / สกิน (Sprite Sheet)'}
               </h3>
               <p className="text-[11px] text-amber-300/70">
                 {isEn
@@ -182,7 +213,21 @@ export const SpriteModal: React.FC<SpriteModalProps> = ({
           </button>
         </div>
 
-        {/* Live Animation Preview Box (Proportional Height to avoid squishing) */}
+        {/* Status Alert Banner */}
+        {statusMsg && (
+          <div
+            className={`mb-3 p-2.5 rounded-xl text-xs font-semibold flex items-center gap-2 ${
+              statusMsg.type === 'success'
+                ? 'bg-emerald-950/80 border border-emerald-500/50 text-emerald-200'
+                : 'bg-red-950/80 border border-red-500/50 text-red-200'
+            }`}
+          >
+            <span>{statusMsg.type === 'success' ? '✨' : '⚠️'}</span>
+            <span>{statusMsg.text}</span>
+          </div>
+        )}
+
+        {/* Live Animation Preview Box */}
         <div className="flex flex-col items-center justify-center p-3.5 bg-black/50 border border-amber-900/50 rounded-2xl mb-3.5">
           {/* Preview Mode Selector: Alive vs Ghost */}
           <div className="flex items-center gap-1.5 mb-2.5 bg-zinc-900/90 p-1 rounded-xl border border-zinc-800">
@@ -232,7 +277,7 @@ export const SpriteModal: React.FC<SpriteModalProps> = ({
                 : hasCustom
                 ? isEn
                   ? 'Custom Uploaded Spritesheet Active'
-                  : 'กำลังใช้งานสไปร์ทชีทที่อัปโหลด'
+                  : 'กำลังใช้งานรูปภาพตัวมอดที่อัปโหลด'
                 : isEn
                 ? 'Original Spritesheet Character Active'
                 : 'ใช้งานมอดสไปร์ทชีทต้นฉบับ'}
@@ -244,7 +289,7 @@ export const SpriteModal: React.FC<SpriteModalProps> = ({
             <div className="flex justify-between items-center text-xs mb-1">
               <span className="text-amber-300 flex items-center gap-1 font-semibold">
                 <Sliders className="w-3.5 h-3.5" />
-                <span>{isEn ? 'Body Length (Vertical Proportion):' : 'ความยาวตัวละคร (สัดส่วนความสูง):'}</span>
+                <span>{isEn ? 'Body Length (Proportion):' : 'ความยาวตัวละคร (สัดส่วนความสูง):'}</span>
               </span>
               <span className="font-mono text-amber-400 font-bold">
                 {Math.round(lengthScale * 100)}%
@@ -270,7 +315,7 @@ export const SpriteModal: React.FC<SpriteModalProps> = ({
                 onClick={() => handleLengthChange(1.0)}
                 className="hover:text-amber-300 underline"
               >
-                {isEn ? 'Reset 100% (Native)' : 'สัดส่วนรูปเดิม 100%'}
+                {isEn ? 'Reset 100%' : 'สัดส่วนเดิม 100%'}
               </button>
               <button
                 onClick={() => handleLengthChange(1.2)}
@@ -288,7 +333,7 @@ export const SpriteModal: React.FC<SpriteModalProps> = ({
           </div>
         </div>
 
-        {/* Drag & Drop / File Input Box */}
+        {/* Tap/Drop Upload Box with Native Transparent Input for 100% iOS/Android Reliability */}
         <div
           onDragOver={(e) => {
             e.preventDefault();
@@ -296,18 +341,18 @@ export const SpriteModal: React.FC<SpriteModalProps> = ({
           }}
           onDragLeave={() => setIsDragging(false)}
           onDrop={handleDrop}
-          onClick={() => fileInputRef.current?.click()}
-          className={`cursor-pointer border-2 border-dashed rounded-2xl p-3 text-center transition flex flex-col items-center justify-center gap-1 mb-3.5 ${
+          className={`relative overflow-hidden border-2 border-dashed rounded-2xl p-4 text-center transition flex flex-col items-center justify-center gap-1.5 mb-3.5 ${
             isDragging
               ? 'border-amber-400 bg-amber-600/20'
-              : 'border-amber-800/60 bg-black/30 hover:bg-black/50 hover:border-amber-500/50'
+              : 'border-amber-600/60 bg-black/40 hover:bg-black/60 hover:border-amber-400'
           }`}
         >
+          {/* Transparent native file input covering the entire box */}
           <input
-            ref={fileInputRef}
             type="file"
-            accept="image/png,image/jpeg,image/webp"
-            className="hidden"
+            accept="image/*"
+            disabled={isProcessing}
+            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20"
             onChange={(e) => {
               if (e.target.files && e.target.files[0]) {
                 handleFileUpload(e.target.files[0]);
@@ -315,21 +360,69 @@ export const SpriteModal: React.FC<SpriteModalProps> = ({
             }}
           />
 
-          <div className="w-8 h-8 rounded-full bg-amber-600/30 flex items-center justify-center text-amber-300">
-            <Upload className="w-4 h-4" />
+          <div className="w-10 h-10 rounded-full bg-amber-600/30 border border-amber-500/40 flex items-center justify-center text-amber-300">
+            {isProcessing ? (
+              <Loader2 className="w-5 h-5 animate-spin text-amber-400" />
+            ) : (
+              <Upload className="w-5 h-5" />
+            )}
           </div>
 
-          <div className="font-bold text-xs md:text-sm text-amber-200">
-            {isEn
-              ? 'Drop or click to upload PNG spritesheet'
-              : 'ลากไฟล์หรือคลิกเพื่ออัปโหลด PNG สไปร์ทชีท'}
+          <div className="font-bold text-sm text-amber-200">
+            {isProcessing
+              ? isEn
+                ? 'Processing & downscaling image...'
+                : 'กำลังประมวลผลรูปภาพและตัดพื้นหลัง...'
+              : isEn
+              ? 'Tap to Upload Spritesheet Image (Photo 2)'
+              : 'แตะที่นี่เพื่ออัปโหลดรูปภาพที่ 2 (จากมือถือ)'}
           </div>
 
-          <p className="text-[10px] text-zinc-400 max-w-xs">
+          <p className="text-[11px] text-zinc-300 max-w-xs">
             {isEn
-              ? 'Maintains true frame height & width with automatic white background removal.'
-              : 'รักษาสัดส่วนความยาวตามรูปภาพจริง พร้อมตัดพื้นหลังสีขาวโปร่งใส'}
+              ? 'Automatically adapts mobile photos, removes white backgrounds, and saves permanently!'
+              : 'รองรับรูปจากมือถือ ตัดพื้นหลังสีขาวให้อัตโนมัติ และบันทึกลงเครื่องอย่างถาวร'}
           </p>
+
+          <div className="flex items-center gap-1 text-[10px] text-amber-400/90 font-medium mt-0.5">
+            <Sparkles className="w-3 h-3" />
+            <span>{isEn ? 'Supports 4x2 frames layout' : 'รองรับรูปสไปร์ทชีท 4 คอลัมน์ x 2 แถว'}</span>
+          </div>
+        </div>
+
+        {/* Explanation & GitHub Deployment Tip Dropdown */}
+        <div className="mb-3.5 bg-black/40 border border-amber-900/40 rounded-xl p-2.5 text-xs text-amber-200/90">
+          <button
+            onClick={() => setShowGuide(!showGuide)}
+            className="w-full flex items-center justify-between text-left font-bold text-amber-300 text-xs hover:text-white transition"
+          >
+            <span className="flex items-center gap-1.5">
+              <HelpCircle className="w-3.5 h-3.5 text-amber-400" />
+              <span>
+                {isEn
+                  ? 'How to make this character permanent on GitHub Pages?'
+                  : 'วิธีใส่รูปนี้ลง GitHub Pages ให้ทุกคนเห็นถาวร?'}
+              </span>
+            </span>
+            <span className="text-zinc-400 text-[10px]">{showGuide ? '▲ ซ่อน' : '▼ ดูวิธี'}</span>
+          </button>
+
+          {showGuide && (
+            <div className="mt-2 text-[11px] text-amber-100/80 leading-relaxed border-t border-amber-900/40 pt-2 space-y-1.5">
+              <p>
+                <strong>1. ใช้ทันทีบนมือถือเครื่องนี้:</strong> กดที่กล่องอัปโหลดด้านบนแล้วเลือกรูปภาพที่ 2 จากเครื่องได้เลย
+                ระบบจะจำไว้ในเครื่องอัตโนมัติ
+              </p>
+              <p>
+                <strong>2. ให้ทุกคนที่เข้าเว็บเห็นรูปนี้ทันที:</strong> นำไฟล์รูปภาพที่ 2 ไปวางไว้ในโฟลเดอร์{' '}
+                <code className="bg-black/60 px-1 py-0.5 rounded text-amber-300 font-mono">public/</code> บน GitHub แล้วตั้งชื่อไฟล์ว่า{' '}
+                <code className="bg-black/60 px-1 py-0.5 rounded text-amber-300 font-mono">weevil_skin.png</code>
+              </p>
+              <p className="text-zinc-400">
+                เมื่อ Deploy รอบใหม่ ตัวเกมจะดึงรูป <code className="text-amber-300 font-mono">weevil_skin.png</code> มาเป็นตัวละครหลักให้ทุกคนทันทีโดยไม่ต้องกดอัปโหลดเอง!
+              </p>
+            </div>
+          )}
         </div>
 
         {/* 8 Frames Strip Gallery */}
@@ -384,13 +477,13 @@ export const SpriteModal: React.FC<SpriteModalProps> = ({
               className="flex-1 py-2 px-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition"
             >
               <RotateCcw className="w-3.5 h-3.5" />
-              <span>{isEn ? 'Reset to Default' : 'รีเซ็ตกลับเป็นค่าเริ่มต้น'}</span>
+              <span>{isEn ? 'Reset to Default' : 'รีเซ็ตเป็นค่าเริ่มต้น'}</span>
             </button>
           )}
 
           <button
             onClick={onClose}
-            className="flex-1 py-2 px-3 rounded-xl bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white text-xs font-bold shadow-lg transition flex items-center justify-center gap-1.5"
+            className="flex-1 py-2.5 px-3 rounded-xl bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white text-xs font-bold shadow-lg transition flex items-center justify-center gap-1.5"
           >
             <Check className="w-4 h-4" />
             <span>{isEn ? 'Apply & Play' : 'เสร็จสิ้น'}</span>

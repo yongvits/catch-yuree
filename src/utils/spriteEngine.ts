@@ -7,6 +7,75 @@ export interface SpriteSheetData {
   isLoaded: boolean;
 }
 
+// Native IndexedDB helper for reliable persistent storage on mobile devices (bypassing Safari's 5MB localStorage limit)
+const IDB_NAME = 'weevil_game_assets';
+const IDB_STORE = 'sprites';
+const IDB_KEY = 'custom_spritesheet_data';
+
+async function openIDB(): Promise<IDBDatabase | null> {
+  if (typeof window === 'undefined' || !window.indexedDB) return null;
+  return new Promise((resolve) => {
+    try {
+      const req = indexedDB.open(IDB_NAME, 1);
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        if (!db.objectStoreNames.contains(IDB_STORE)) {
+          db.createObjectStore(IDB_STORE);
+        }
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => resolve(null);
+    } catch {
+      resolve(null);
+    }
+  });
+}
+
+async function saveToIDB(val: string): Promise<void> {
+  const db = await openIDB();
+  if (!db) return;
+  return new Promise((resolve) => {
+    try {
+      const tx = db.transaction(IDB_STORE, 'readwrite');
+      tx.objectStore(IDB_STORE).put(val, IDB_KEY);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => resolve();
+    } catch {
+      resolve();
+    }
+  });
+}
+
+async function getFromIDB(): Promise<string | null> {
+  const db = await openIDB();
+  if (!db) return null;
+  return new Promise((resolve) => {
+    try {
+      const tx = db.transaction(IDB_STORE, 'readonly');
+      const req = tx.objectStore(IDB_STORE).get(IDB_KEY);
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => resolve(null);
+    } catch {
+      resolve(null);
+    }
+  });
+}
+
+async function clearFromIDB(): Promise<void> {
+  const db = await openIDB();
+  if (!db) return;
+  return new Promise((resolve) => {
+    try {
+      const tx = db.transaction(IDB_STORE, 'readwrite');
+      tx.objectStore(IDB_STORE).delete(IDB_KEY);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => resolve();
+    } catch {
+      resolve();
+    }
+  });
+}
+
 class SpriteEngine {
   private frames: HTMLCanvasElement[] = [];
   private ghostFrames: HTMLCanvasElement[] = [];
@@ -18,7 +87,7 @@ class SpriteEngine {
   constructor() {
     this.loadSavedLengthScale();
     this.initDefaultProceduralSprites();
-    this.loadSavedCustomSprite();
+    this.initSpriteCascade();
   }
 
   private loadSavedLengthScale() {
@@ -49,16 +118,79 @@ class SpriteEngine {
     return this.customLengthScale;
   }
 
-  // Load any previously uploaded spritesheet from localStorage
-  private loadSavedCustomSprite() {
+  // Load custom sprite in priority order: localStorage -> IndexedDB -> Bundled skin file
+  private async initSpriteCascade() {
+    // 1. Try localStorage
     try {
       const saved = localStorage.getItem('weevil_custom_spritesheet');
-      if (saved) {
-        this.loadFromDataUrl(saved);
+      if (saved && saved.startsWith('data:image/')) {
+        const ok = await this.loadFromDataUrl(saved);
+        if (ok) return;
       }
     } catch {
       // ignore
     }
+
+    // 2. Try IndexedDB (if localStorage failed or was cleared)
+    try {
+      const idbSaved = await getFromIDB();
+      if (idbSaved && idbSaved.startsWith('data:image/')) {
+        const ok = await this.loadFromDataUrl(idbSaved);
+        if (ok) {
+          try {
+            localStorage.setItem('weevil_custom_spritesheet', idbSaved);
+          } catch {
+            // ignore
+          }
+          return;
+        }
+      }
+    } catch {
+      // ignore
+    }
+
+    // 3. Try bundled skins in public folder (weevil_skin.png, yuree.png, spritesheet.png)
+    const base = import.meta.env.BASE_URL || './';
+    const candidates = [
+      `${base}weevil_skin.png`,
+      `${base}yuree.png`,
+      `${base}spritesheet.png`,
+      './weevil_skin.png',
+      './yuree.png',
+      './spritesheet.png',
+      '/weevil_skin.png',
+    ];
+
+    for (const url of candidates) {
+      try {
+        const resp = await fetch(url, { method: 'HEAD' });
+        if (resp.ok) {
+          const loaded = await this.loadFromUrl(url);
+          if (loaded) return;
+        }
+      } catch {
+        // continue
+      }
+    }
+  }
+
+  public loadFromUrl(url: string): Promise<boolean> {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return resolve(false);
+        ctx.drawImage(img, 0, 0);
+        const dataUrl = canvas.toDataURL('image/png');
+        this.loadFromDataUrl(dataUrl).then(resolve);
+      };
+      img.onerror = () => resolve(false);
+      img.src = url;
+    });
   }
 
   public onLoaded(callback: () => void) {
@@ -72,37 +204,75 @@ class SpriteEngine {
     this.onSpriteLoadedCallbacks.forEach((cb) => cb());
   }
 
-  public loadFromFile(file: File): Promise<boolean> {
+  // Load from File with auto-downscaling to guarantee compatibility with mobile devices
+  public async loadFromFile(file: File): Promise<{ success: boolean; error?: string }> {
     return new Promise((resolve) => {
       const reader = new FileReader();
-      reader.onload = (e) => {
-        const dataUrl = e.target?.result as string;
-        if (dataUrl) {
-          this.loadFromDataUrl(dataUrl).then((success) => {
-            if (success) {
-              try {
-                localStorage.setItem('weevil_custom_spritesheet', dataUrl);
-              } catch {
-                // Ignore storage limits
-              }
-            }
-            resolve(success);
+      reader.onload = async (e) => {
+        try {
+          const rawDataUrl = e.target?.result as string;
+          if (!rawDataUrl) {
+            return resolve({ success: false, error: 'Could not read file' });
+          }
+
+          const img = new Image();
+          await new Promise<void>((imgRes, imgRej) => {
+            img.onload = () => imgRes();
+            img.onerror = () => imgRej(new Error('Invalid image format'));
+            img.src = rawDataUrl;
           });
-        } else {
-          resolve(false);
+
+          // Downscale huge mobile photos (e.g. 4000x3000) to optimal game spritesheet dimension (max 1024px)
+          const maxDim = 1024;
+          let w = img.width;
+          let h = img.height;
+          if (w > maxDim || h > maxDim) {
+            if (w > h) {
+              h = Math.round((h * maxDim) / w);
+              w = maxDim;
+            } else {
+              w = Math.round((w * maxDim) / h);
+              h = maxDim;
+            }
+          }
+
+          const resizeCanvas = document.createElement('canvas');
+          resizeCanvas.width = w;
+          resizeCanvas.height = h;
+          const rCtx = resizeCanvas.getContext('2d');
+          if (!rCtx) return resolve({ success: false, error: 'Canvas context unavailable' });
+          rCtx.drawImage(img, 0, 0, w, h);
+
+          const optimizedDataUrl = resizeCanvas.toDataURL('image/png');
+
+          const success = await this.loadFromDataUrl(optimizedDataUrl);
+          if (success) {
+            try {
+              localStorage.setItem('weevil_custom_spritesheet', optimizedDataUrl);
+            } catch {
+              // Ignore localStorage quota exceeded on mobile Safari
+            }
+            await saveToIDB(optimizedDataUrl);
+            resolve({ success: true });
+          } else {
+            resolve({ success: false, error: 'Failed to slice 4x2 grid' });
+          }
+        } catch (err: any) {
+          resolve({ success: false, error: err?.message || 'Processing failed' });
         }
       };
-      reader.onerror = () => resolve(false);
+      reader.onerror = () => resolve({ success: false, error: 'File read error' });
       reader.readAsDataURL(file);
     });
   }
 
-  public resetToDefault() {
+  public async resetToDefault() {
     try {
       localStorage.removeItem('weevil_custom_spritesheet');
     } catch {
       // ignore
     }
+    await clearFromIDB();
     this.customImageSrc = null;
     this.initDefaultProceduralSprites();
     this.notifyLoaded();
@@ -118,6 +288,10 @@ class SpriteEngine {
         const totalFrames = 8;
         const frameWidth = Math.floor(img.width / cols);
         const frameHeight = Math.floor(img.height / rows);
+
+        if (frameWidth <= 0 || frameHeight <= 0) {
+          return resolve(false);
+        }
 
         const newFrames: HTMLCanvasElement[] = [];
 
@@ -143,15 +317,25 @@ class SpriteEngine {
               frameHeight
             );
 
-            // Chroma-key white background to transparent
+            // Chroma-key white/near-white background to transparent with smooth edge transition
             const imgData = fCtx.getImageData(0, 0, frameWidth, frameHeight);
             const data = imgData.data;
             for (let i = 0; i < data.length; i += 4) {
               const red = data[i];
               const green = data[i + 1];
               const blue = data[i + 2];
-              if (red > 235 && green > 235 && blue > 235) {
-                data[i + 3] = 0;
+              const minVal = Math.min(red, green, blue);
+              const maxVal = Math.max(red, green, blue);
+              const sat = maxVal === 0 ? 0 : (maxVal - minVal) / maxVal;
+
+              // White/light gray background removal with soft antialiasing
+              if (minVal > 218 && sat < 0.16) {
+                if (minVal > 240) {
+                  data[i + 3] = 0;
+                } else {
+                  const factor = (minVal - 218) / 22;
+                  data[i + 3] = Math.round(data[i + 3] * (1 - factor));
+                }
               }
             }
             fCtx.putImageData(imgData, 0, 0);
