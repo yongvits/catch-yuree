@@ -9,7 +9,7 @@ import { GameDifficulty, DifficultyConfig } from './types/game';
 import { soundManager } from './audio/soundManager';
 import { translations, Language } from './i18n/translations';
 import { spriteEngine } from './utils/spriteEngine';
-import { Sparkles, Upload } from 'lucide-react';
+import { Upload } from 'lucide-react';
 
 const DIFFICULTY_ORDER: GameDifficulty[] = ['easy', 'normal', 'hard', 'extreme'];
 
@@ -77,6 +77,57 @@ export default function App() {
     maxCombo: 0,
     accuracy: 0,
   });
+
+  // Interface visibility (Hide all except time and remaining count)
+  const [isInterfaceHidden, setIsInterfaceHidden] = useState(false);
+  const [showUnhideHint, setShowUnhideHint] = useState(false);
+  const hintTimerRef = useRef<number | null>(null);
+
+  const handleHideInterface = useCallback(() => {
+    setIsInterfaceHidden(true);
+    setShowUnhideHint(true);
+    if (hintTimerRef.current) clearTimeout(hintTimerRef.current);
+    hintTimerRef.current = window.setTimeout(() => {
+      setShowUnhideHint(false);
+    }, 4000);
+  }, []);
+
+  const handleUnhideInterface = useCallback(() => {
+    setIsInterfaceHidden(false);
+    setShowUnhideHint(false);
+    if (hintTimerRef.current) clearTimeout(hintTimerRef.current);
+    if (typeof navigator !== 'undefined' && navigator.vibrate) {
+      try {
+        navigator.vibrate([30, 40, 30]);
+      } catch {
+        // ignore vibrate error
+      }
+    }
+  }, []);
+
+  // 4-finger multi-touch listener to restore interface
+  useEffect(() => {
+    const handleTouchStart = (e: TouchEvent) => {
+      if (e.touches && e.touches.length >= 4) {
+        handleUnhideInterface();
+      }
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Desktop keyboard shortcut (H, Escape, 4) to toggle / restore interface
+      if (e.key === 'Escape' || e.key === 'h' || e.key === 'H' || e.key === '4') {
+        setIsInterfaceHidden((prev) => !prev);
+      }
+    };
+
+    window.addEventListener('touchstart', handleTouchStart, { passive: true });
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      window.removeEventListener('touchstart', handleTouchStart);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [handleUnhideInterface]);
 
   // Best Records
   const [bestRecords, setBestRecords] = useState<Record<GameDifficulty, number | null>>(() => {
@@ -292,9 +343,18 @@ export default function App() {
 
       {/* Floating toast notification */}
       {toastMessage && (
-        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-50 bg-black/80 backdrop-blur-md border border-amber-400/50 text-amber-200 px-4 py-2 rounded-2xl shadow-2xl flex items-center gap-2 text-xs md:text-sm animate-in fade-in slide-in-from-bottom-4 duration-300">
-          <Sparkles className="w-4 h-4 text-amber-400" />
+        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-50 bg-black/80 backdrop-blur-md border border-amber-400/50 text-amber-200 px-4 py-2 rounded-2xl shadow-2xl text-xs md:text-sm animate-in fade-in slide-in-from-bottom-4 duration-300">
           <span>{toastMessage}</span>
+        </div>
+      )}
+
+      {/* Floating hint when Interface is hidden */}
+      {isInterfaceHidden && showUnhideHint && (
+        <div
+          onClick={handleUnhideInterface}
+          className="absolute top-16 left-1/2 -translate-x-1/2 z-30 bg-black/85 backdrop-blur-md border border-amber-400/40 text-amber-200 px-4 py-2 rounded-2xl shadow-2xl text-xs md:text-sm animate-in fade-in slide-in-from-top-3 duration-300 cursor-pointer"
+        >
+          <span>{t.hudHiddenNotice}</span>
         </div>
       )}
 
@@ -320,6 +380,9 @@ export default function App() {
         isMuted={isMuted}
         language={language}
         t={t}
+        isInterfaceHidden={isInterfaceHidden}
+        onHideInterface={handleHideInterface}
+        onUnhideInterface={handleUnhideInterface}
         onRestart={handleRestart}
         onToggleMute={handleToggleMute}
         onToggleLanguage={handleToggleLanguage}

@@ -5,8 +5,16 @@ export interface TranslationStrings {
   loadingSubtitle: string;
   hudRemaining: string;
   hudUnits: string;
+  hudTimeLabel: string;
   hudTip: string;
   hudRestart: string;
+  hudRestartBtn: string;
+  hudSoundBtn: string;
+  hudSettingsBtn: string;
+  hudSpriteBtn: string;
+  hudKnowledgeBtn: string;
+  hudHideBtn: string;
+  hudHiddenNotice: string;
   hudMute: string;
   hudUnmute: string;
   hudSettings: string;
@@ -63,8 +71,16 @@ export const translations: Record<Language, TranslationStrings> = {
     loadingSubtitle: 'Placing weevils and activating luminous spirit glow',
     hudRemaining: 'Left:',
     hudUnits: 'bugs',
+    hudTimeLabel: 'Time',
     hudTip: 'Tap weevils to release their glowing spirits',
     hudRestart: 'Restart game',
+    hudRestartBtn: 'Restart',
+    hudSoundBtn: 'Sound',
+    hudSettingsBtn: 'Settings',
+    hudSpriteBtn: 'Skins',
+    hudKnowledgeBtn: 'Tips',
+    hudHideBtn: 'Hide UI',
+    hudHiddenNotice: 'UI Hidden — Tap with 4 fingers to restore',
     hudMute: 'Mute sound',
     hudUnmute: 'Unmute sound',
     hudSettings: 'Game Settings & Difficulty',
@@ -126,8 +142,16 @@ export const translations: Record<Language, TranslationStrings> = {
     loadingSubtitle: 'จัดวางตำแหน่งตัวมอดและระบบวิญญาณเรืองแสงสว่างจ้า',
     hudRemaining: 'เหลือ:',
     hudUnits: 'ตัว',
+    hudTimeLabel: 'เวลา',
     hudTip: 'แตะตัวมอดเพื่อปลดปล่อยวิญญาณเรืองแสง',
     hudRestart: 'เริ่มเกมใหม่ (Restart)',
+    hudRestartBtn: 'เริ่มใหม่',
+    hudSoundBtn: 'เสียง',
+    hudSettingsBtn: 'ตั้งค่า',
+    hudSpriteBtn: 'สกิน',
+    hudKnowledgeBtn: 'ความรู้',
+    hudHideBtn: 'ซ่อน Interface',
+    hudHiddenNotice: 'ซ่อน Interface แล้ว — แตะหน้าจอพร้อมกัน 4 นิ้วเพื่อแสดงกลับมา',
     hudMute: 'ปิดเสียง (Mute)',
     hudUnmute: 'เปิดเสียง (Unmute)',
     hudSettings: 'ตั้งค่าระดับความยากและระบบเกม',

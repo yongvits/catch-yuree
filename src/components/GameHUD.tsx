@@ -1,5 +1,4 @@
 import React from 'react';
-import { Volume2, VolumeX, RotateCcw, BookOpen, Settings, Languages, Palette } from 'lucide-react';
 import { TranslationStrings, Language } from '../i18n/translations';
 
 interface GameHUDProps {
@@ -10,6 +9,9 @@ interface GameHUDProps {
   isMuted: boolean;
   language: Language;
   t: TranslationStrings;
+  isInterfaceHidden: boolean;
+  onHideInterface: () => void;
+  onUnhideInterface: () => void;
   onRestart: () => void;
   onToggleMute: () => void;
   onToggleLanguage: () => void;
@@ -26,6 +28,9 @@ export const GameHUD: React.FC<GameHUDProps> = ({
   isMuted,
   language,
   t,
+  isInterfaceHidden,
+  onHideInterface,
+  onUnhideInterface,
   onRestart,
   onToggleMute,
   onToggleLanguage,
@@ -46,9 +51,8 @@ export const GameHUD: React.FC<GameHUDProps> = ({
     <>
       {/* Top Left Floating Bar */}
       <div className="absolute top-3 left-3 md:top-4 md:left-4 z-20 flex flex-wrap items-center gap-2 pointer-events-none">
-        {/* Weevil Remaining Counter */}
+        {/* Weevil Remaining Counter (Clean - No icon) */}
         <div className="bg-black/75 backdrop-blur-md border border-amber-500/20 px-3.5 py-1.5 rounded-full shadow-lg flex items-center gap-2 pointer-events-auto text-xs md:text-sm">
-          <span className="text-base animate-bounce">🐜</span>
           <span className="font-bold text-amber-300">{t.hudRemaining}</span>
           <span className="font-black text-white">
             <span className="text-amber-400 text-sm md:text-base font-mono">{remainingCount}</span> /{' '}
@@ -63,84 +67,103 @@ export const GameHUD: React.FC<GameHUDProps> = ({
           </div>
         </div>
 
-        {/* Stopwatch */}
-        <div className="bg-black/75 backdrop-blur-md border border-white/10 px-3 py-1.5 rounded-full shadow-lg flex items-center gap-1.5 pointer-events-auto text-xs font-mono text-amber-200">
-          <span>⏱️</span>
-          <span>{formatTime(elapsedTime)}</span>
+        {/* Stopwatch (Clean - No icon) */}
+        <div
+          onClick={isInterfaceHidden ? onUnhideInterface : undefined}
+          title={isInterfaceHidden ? t.hudHiddenNotice : undefined}
+          className={`bg-black/75 backdrop-blur-md border border-white/10 px-3 py-1.5 rounded-full shadow-lg flex items-center gap-1.5 pointer-events-auto text-xs md:text-sm font-mono text-amber-200 transition ${
+            isInterfaceHidden ? 'cursor-pointer hover:border-amber-400/50' : ''
+          }`}
+        >
+          <span className="text-zinc-400 font-sans text-xs">{t.hudTimeLabel}:</span>
+          <span className="font-semibold">{formatTime(elapsedTime)}</span>
         </div>
 
-        {/* Combo Indicator */}
-        {combo > 1 && (
+        {/* Combo Indicator (Clean - No icon, shown when UI is visible) */}
+        {!isInterfaceHidden && combo > 1 && (
           <div className="bg-gradient-to-r from-amber-600/90 to-red-600/90 backdrop-blur-md border border-amber-300/40 px-3 py-1 rounded-full shadow-lg flex items-center gap-1.5 pointer-events-auto text-xs font-black text-white animate-pulse">
-            <span>🔥</span>
             <span>{t.canvasCombo}{combo}!</span>
           </div>
         )}
 
-        {/* Action Buttons */}
-        <div className="flex items-center gap-1.5 pointer-events-auto">
-          {/* Restart */}
-          <button
-            onClick={onRestart}
-            title={t.hudRestart}
-            className="bg-black/75 hover:bg-amber-900/80 active:scale-90 border border-white/10 w-8 h-8 rounded-full shadow-lg flex items-center justify-center text-amber-200 hover:text-white transition"
-          >
-            <RotateCcw className="w-3.5 h-3.5" />
-          </button>
+        {/* Action Buttons (Rendered only when interface is not hidden) */}
+        {!isInterfaceHidden && (
+          <div className="flex flex-wrap items-center gap-1.5 pointer-events-auto">
+            {/* Restart */}
+            <button
+              onClick={onRestart}
+              title={t.hudRestart}
+              className="bg-black/75 hover:bg-amber-900/80 active:scale-95 border border-white/10 px-3 py-1.5 rounded-full shadow-lg text-amber-200 hover:text-white transition text-xs font-medium"
+            >
+              {t.hudRestartBtn}
+            </button>
 
-          {/* Sound Toggle */}
-          <button
-            onClick={onToggleMute}
-            title={isMuted ? t.hudUnmute : t.hudMute}
-            className="bg-black/75 hover:bg-amber-900/80 active:scale-90 border border-white/10 w-8 h-8 rounded-full shadow-lg flex items-center justify-center text-amber-200 hover:text-white transition"
-          >
-            {isMuted ? <VolumeX className="w-3.5 h-3.5 text-red-400" /> : <Volume2 className="w-3.5 h-3.5 text-emerald-400" />}
-          </button>
+            {/* Sound Toggle */}
+            <button
+              onClick={onToggleMute}
+              title={isMuted ? t.hudUnmute : t.hudMute}
+              className={`bg-black/75 hover:bg-amber-900/80 active:scale-95 border border-white/10 px-3 py-1.5 rounded-full shadow-lg transition text-xs font-medium ${
+                isMuted ? 'text-zinc-400' : 'text-emerald-300'
+              }`}
+            >
+              {isMuted ? `${t.hudSoundBtn}: OFF` : `${t.hudSoundBtn}: ON`}
+            </button>
 
-          {/* Language Toggle (EN / TH) */}
-          <button
-            onClick={onToggleLanguage}
-            title={t.hudLang}
-            className="bg-black/75 hover:bg-amber-900/80 active:scale-90 border border-amber-400/30 px-2 h-8 rounded-full shadow-lg flex items-center justify-center gap-1 text-amber-200 hover:text-white transition text-[11px] font-bold"
-          >
-            <Languages className="w-3 h-3 text-amber-400" />
-            <span>{language.toUpperCase()}</span>
-          </button>
+            {/* Language Toggle (EN / TH) */}
+            <button
+              onClick={onToggleLanguage}
+              title={t.hudLang}
+              className="bg-black/75 hover:bg-amber-900/80 active:scale-95 border border-amber-400/30 px-3 py-1.5 rounded-full shadow-lg text-amber-200 hover:text-white transition text-xs font-bold"
+            >
+              {language.toUpperCase()}
+            </button>
 
-          {/* Settings / Difficulty */}
-          <button
-            onClick={onOpenSettings}
-            title={t.hudSettings}
-            className="bg-black/75 hover:bg-amber-900/80 active:scale-90 border border-white/10 w-8 h-8 rounded-full shadow-lg flex items-center justify-center text-amber-200 hover:text-white transition"
-          >
-            <Settings className="w-3.5 h-3.5" />
-          </button>
+            {/* Settings / Difficulty */}
+            <button
+              onClick={onOpenSettings}
+              title={t.hudSettings}
+              className="bg-black/75 hover:bg-amber-900/80 active:scale-95 border border-white/10 px-3 py-1.5 rounded-full shadow-lg text-amber-200 hover:text-white transition text-xs font-medium"
+            >
+              {t.hudSettingsBtn}
+            </button>
 
-          {/* Sprite Sheet Manager */}
-          <button
-            onClick={onOpenSprite}
-            title={language === 'en' ? 'Weevil Character Spritesheet' : 'สไปร์ทชีทตัวมอด'}
-            className="bg-black/75 hover:bg-amber-900/80 active:scale-90 border border-white/10 w-8 h-8 rounded-full shadow-lg flex items-center justify-center text-amber-200 hover:text-white transition"
-          >
-            <Palette className="w-3.5 h-3.5 text-pink-400" />
-          </button>
+            {/* Sprite Sheet Manager */}
+            <button
+              onClick={onOpenSprite}
+              title={language === 'en' ? 'Weevil Character Spritesheet' : 'สไปร์ทชีทตัวมอด'}
+              className="bg-black/75 hover:bg-amber-900/80 active:scale-95 border border-white/10 px-3 py-1.5 rounded-full shadow-lg text-pink-300 hover:text-white transition text-xs font-medium"
+            >
+              {t.hudSpriteBtn}
+            </button>
 
-          {/* Fun Facts / Rice Storage tips */}
-          <button
-            onClick={onOpenKnowledge}
-            title={t.hudKnowledge}
-            className="bg-black/75 hover:bg-amber-900/80 active:scale-90 border border-white/10 w-8 h-8 rounded-full shadow-lg flex items-center justify-center text-amber-200 hover:text-white transition"
-          >
-            <BookOpen className="w-3.5 h-3.5" />
-          </button>
+            {/* Fun Facts / Rice Storage tips */}
+            <button
+              onClick={onOpenKnowledge}
+              title={t.hudKnowledge}
+              className="bg-black/75 hover:bg-amber-900/80 active:scale-95 border border-white/10 px-3 py-1.5 rounded-full shadow-lg text-amber-200 hover:text-white transition text-xs font-medium"
+            >
+              {t.hudKnowledgeBtn}
+            </button>
+
+            {/* Hide Interface Button */}
+            <button
+              onClick={onHideInterface}
+              title={t.hudHideBtn}
+              className="bg-amber-950/80 hover:bg-amber-900 active:scale-95 border border-amber-500/40 px-3 py-1.5 rounded-full shadow-lg text-amber-300 hover:text-amber-100 transition text-xs font-semibold"
+            >
+              {t.hudHideBtn}
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Top Right Tip Banner (Clean - No icon, hidden when interface is hidden) */}
+      {!isInterfaceHidden && (
+        <div className="absolute top-3 right-3 md:top-4 md:right-4 z-10 bg-black/55 backdrop-blur-md border border-white/10 px-3.5 py-1.5 rounded-full text-[11px] md:text-xs text-amber-200/90 pointer-events-none shadow-md">
+          <span>{t.hudTip}</span>
         </div>
-      </div>
-
-      {/* Top Right Tip Banner */}
-      <div className="absolute top-3 right-3 md:top-4 md:right-4 z-10 bg-black/55 backdrop-blur-md border border-white/10 px-3.5 py-1.5 rounded-full text-[11px] md:text-xs text-amber-200/90 pointer-events-none shadow-md flex items-center gap-1.5">
-        <span className="text-sm">💡</span>
-        <span>{t.hudTip}</span>
-      </div>
+      )}
     </>
   );
 };
+

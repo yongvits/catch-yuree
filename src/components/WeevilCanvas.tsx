@@ -754,6 +754,10 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
       className="absolute inset-0 w-full h-full block cursor-crosshair touch-none select-none z-0"
       onMouseDown={(e) => handleInput(e.clientX, e.clientY)}
       onTouchStart={(e) => {
+        if (e.touches && e.touches.length >= 4) {
+          // Reserved for 4-finger interface restore gesture
+          return;
+        }
         if (e.touches && e.touches.length > 0) {
           handleInput(e.touches[0].clientX, e.touches[0].clientY);
         }
