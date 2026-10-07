@@ -237,125 +237,143 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
   // 5. Draw animated weevil using the 8-frame character spritesheet
   const drawWeevil = (ctx: CanvasRenderingContext2D, w: Weevil) => {
     const frameIndex = Math.floor(w.legsPhase) % 8;
+    const squishScaleX = w.isDying ? w.scale * 1.3 : w.scale;
+    const squishScaleY = w.isDying ? w.scale * 0.7 : w.scale;
+
+    ctx.save();
+    ctx.translate(w.x, w.y);
+    ctx.rotate(w.rotation);
+    ctx.scale(squishScaleX, squishScaleY);
+    ctx.globalAlpha = w.isDying ? Math.min(w.opacity, 0.65) : w.opacity;
+
     spriteEngine.drawFrame(
       ctx,
       frameIndex,
-      w.x,
-      w.y,
+      0,
+      0,
       w.size,
-      w.rotation,
-      w.opacity,
-      w.scale
+      0,
+      w.isDying ? 0.65 : 1.0,
+      1.0,
+      w.isDying
     );
+    ctx.restore();
   };
 
-  // 6. Draw bright glowing ghost ascending with 3D zoom
+  // 6. Draw bright glowing spirit of the spritesheet character ascending to heaven (blue spirit tone, halo removed, reduced opacity & enhanced glow)
   const drawGhost = (ctx: CanvasRenderingContext2D, g: Ghost) => {
     ctx.save();
     ctx.translate(g.x, g.y);
     ctx.rotate(g.rotation);
     ctx.scale(g.scale, g.scale);
-    ctx.globalAlpha = g.opacity;
+    ctx.globalAlpha = Math.max(0, Math.min(1, g.opacity * 0.8)); // Reduced opacity for ethereal translucency
 
     const size = g.size;
 
-    // Neon cyan glow aura
-    ctx.shadowColor = '#00ffff';
-    ctx.shadowBlur = 28;
-
-    // Luminous pastel blue & white core
-    ctx.fillStyle = '#bdf1ff';
-    ctx.strokeStyle = '#00d5f0';
-    ctx.lineWidth = size * 0.085;
-
-    // Abdomen
-    ctx.beginPath();
-    ctx.ellipse(0, size * 0.15, size * 0.45, size * 0.65, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-
-    // Thorax
-    ctx.beginPath();
-    ctx.ellipse(0, -size * 0.35, size * 0.35, size * 0.3, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-
-    // Head
-    ctx.beginPath();
-    ctx.ellipse(0, -size * 0.62, size * 0.18, size * 0.18, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-
-    // Snout
-    ctx.beginPath();
-    ctx.moveTo(0, -size * 0.68);
-    ctx.lineTo(0, -size * 1.25);
-    ctx.stroke();
-
-    // Luminous pink fluffy bows matching character
-    ctx.fillStyle = 'rgba(255, 105, 180, 0.88)';
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = size * 0.04;
-    [-1, 1].forEach((side) => {
-      ctx.beginPath();
-      ctx.arc(side * size * 0.35, -size * 0.15, size * 0.16, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-    });
-
-    // Translucent fairy angel wings
-    ctx.shadowColor = 'transparent';
-    ctx.fillStyle = 'rgba(0, 225, 255, 0.88)';
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = size * 0.045;
-
-    const wingWiggle = Math.sin(g.wingPhase) * 0.3;
-
-    // Left wing
+    // --- 1. ENHANCED LUMINOUS GLOW EFFECT (เพิ่มการเรืองแสง) ---
+    // Outer wide ethereal blue spirit glow aura
     ctx.save();
-    ctx.translate(-size * 0.35, -size * 0.1);
-    ctx.rotate(-0.4 + wingWiggle);
+    ctx.shadowColor = '#0284c7';
+    ctx.shadowBlur = 45;
+    ctx.fillStyle = 'rgba(56, 189, 248, 0.32)';
     ctx.beginPath();
-    ctx.ellipse(0, 0, size * 0.45, size * 0.22, -0.3, 0, Math.PI * 2);
+    ctx.ellipse(0, 0, size * 1.55, size * 1.85, 0, 0, Math.PI * 2);
     ctx.fill();
-    ctx.stroke();
     ctx.restore();
 
-    // Right wing
+    // Radiant cyan/blue luminous core glow
     ctx.save();
-    ctx.translate(size * 0.35, -size * 0.1);
-    ctx.rotate(0.4 - wingWiggle);
+    ctx.shadowColor = '#38bdf8';
+    ctx.shadowBlur = 32;
+    const coreGrad = ctx.createRadialGradient(0, 0, size * 0.15, 0, 0, size * 1.25);
+    coreGrad.addColorStop(0, 'rgba(224, 242, 254, 0.65)'); // Luminous crystal bright center
+    coreGrad.addColorStop(0.55, 'rgba(56, 189, 248, 0.45)');
+    coreGrad.addColorStop(1, 'rgba(14, 165, 233, 0)');
+    ctx.fillStyle = coreGrad;
     ctx.beginPath();
-    ctx.ellipse(0, 0, size * 0.45, size * 0.22, 0.3, 0, Math.PI * 2);
+    ctx.arc(0, 0, size * 1.25, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    // 2. Translucent Angelic Fairy Wings with soft blue glow
+    const wingWiggle = Math.sin(g.wingPhase) * 0.35;
+    const wingSpan = size * 1.25;
+
+    // Left Wing
+    ctx.save();
+    ctx.translate(-size * 0.55, -size * 0.15);
+    ctx.rotate(-0.45 + wingWiggle);
+    ctx.fillStyle = 'rgba(56, 189, 248, 0.45)';
+    ctx.strokeStyle = '#bae6fd';
+    ctx.lineWidth = size * 0.08;
+    ctx.shadowColor = '#38bdf8';
+    ctx.shadowBlur = 20;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, wingSpan * 0.85, wingSpan * 0.38, -0.25, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
     ctx.restore();
 
-    // Cute deep marine eyes
-    ctx.fillStyle = '#004c5e';
+    // Right Wing
+    ctx.save();
+    ctx.translate(size * 0.55, -size * 0.15);
+    ctx.rotate(0.45 - wingWiggle);
+    ctx.fillStyle = 'rgba(56, 189, 248, 0.45)';
+    ctx.strokeStyle = '#bae6fd';
+    ctx.lineWidth = size * 0.08;
+    ctx.shadowColor = '#38bdf8';
+    ctx.shadowBlur = 20;
     ctx.beginPath();
-    ctx.arc(-size * 0.08, -size * 0.62, size * 0.05, 0, Math.PI * 2);
-    ctx.arc(size * 0.08, -size * 0.62, size * 0.05, 0, Math.PI * 2);
+    ctx.ellipse(0, 0, wingSpan * 0.85, wingSpan * 0.38, 0.25, 0, Math.PI * 2);
     ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+
+    // 3. THE SPIRIT SPRITE WITH TRANSLUCENT OPACITY & RADIANT GLOW
+    ctx.save();
+    ctx.shadowColor = '#38bdf8';
+    ctx.shadowBlur = 36;
+    spriteEngine.drawFrame(
+      ctx,
+      g.frameIndex ?? 0,
+      0,
+      0,
+      size,
+      0, // Already transformed by parent
+      0.72, // Reduced opacity for ethereal spirit translucency
+      1.0,
+      true // isGhost = true
+    );
+    ctx.restore();
+
+    // Halo ring removed per user request: "ตอนตายเอาวงแหวนที่หัวออก ปรับให้เป็นโทนออกฟ้า"
 
     ctx.restore();
-    ctx.globalAlpha = 1.0;
   };
 
-  // 7. Create squish bran powder particles
+  // 7. Create squish particles matching the blue spirit theme & rice bran
   const createSquishParticles = (x: number, y: number) => {
-    const count = 18;
-    const colors = ['#4a2411', '#7d4526', '#c9a175', '#fcfaf2'];
+    const count = 22;
+    const colors = [
+      '#38bdf8', // Luminous sky blue
+      '#60a5fa', // Soft blue
+      '#93c5fd', // Light spirit blue
+      '#0284c7', // Rich deep blue
+      '#bae6fd', // Pale ethereal ice blue
+      '#ca945a', // Caramel shell powder
+      '#fef08a', // Rice powder
+      '#ffffff', // Pure white spark
+    ];
     for (let i = 0; i < count; i++) {
       stateRef.current.particles.push({
         x: x,
         y: y,
-        vx: (Math.random() - 0.5) * 6,
-        vy: (Math.random() - 0.5) * 6,
-        size: 1.5 + Math.random() * 3.5,
+        vx: (Math.random() - 0.5) * 7,
+        vy: (Math.random() - 0.5) * 7,
+        size: 1.5 + Math.random() * 4.0,
         color: colors[Math.floor(Math.random() * colors.length)],
         life: 1.0,
-        decay: 0.03 + Math.random() * 0.04,
+        decay: 0.025 + Math.random() * 0.035,
       });
     }
   };
@@ -399,6 +417,7 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
 
         if (dist < hitRadius) {
           w.isDying = true;
+          w.opacity = 0.65;
           w.vx = 0;
           w.vy = 0;
 
@@ -424,7 +443,7 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
             soundManager.playCombo(stateRef.current.combo);
             addFloatingText(w.x, w.y, `${comboPrefix}${stateRef.current.combo}!`, '#38bdf8');
           } else {
-            addFloatingText(w.x, w.y, ascendedText, '#fef08a');
+            addFloatingText(w.x, w.y, ascendedText, '#38bdf8');
           }
 
           // Released ghost
@@ -433,12 +452,13 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
             id: stateRef.current.ghostIdCounter,
             x: w.x,
             y: w.y,
+            frameIndex: Math.floor(w.legsPhase) % 8,
             floatSpeed: 2.5 + Math.random() * 1.5,
             zoomSpeed: 0.05 + Math.random() * 0.03,
             scale: 1.0,
             rotation: w.rotation,
-            opacity: 0.95,
-            fadeSpeed: 0.016 + Math.random() * 0.005,
+            opacity: 0.72,
+            fadeSpeed: 0.015 + Math.random() * 0.005,
             wavePhase: Math.random() * Math.PI,
             wingPhase: Math.random() * 10,
             size: w.size,

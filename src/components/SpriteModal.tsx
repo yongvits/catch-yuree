@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { X, Upload, RotateCcw, Check, Sliders } from 'lucide-react';
+import { X, Upload, RotateCcw, Check, Sliders, Ghost as GhostIcon, Bug } from 'lucide-react';
 import { spriteEngine } from '../utils/spriteEngine';
 import { TranslationStrings, Language } from '../i18n/translations';
 
@@ -21,6 +21,7 @@ export const SpriteModal: React.FC<SpriteModalProps> = ({
   const [hasCustom, setHasCustom] = useState(spriteEngine.hasCustomSprite());
   const [isDragging, setIsDragging] = useState(false);
   const [lengthScale, setLengthScale] = useState(spriteEngine.getLengthScale());
+  const [previewMode, setPreviewMode] = useState<'alive' | 'ghost'>('ghost'); // Default shows ghost to let user see the new ghost palette immediately!
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const previewCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -65,18 +66,61 @@ export const SpriteModal: React.FC<SpriteModalProps> = ({
     ctx.ellipse(145, 170, 9, 3, 0.9, 0, Math.PI * 2);
     ctx.fill();
 
-    // Draw active animated weevil with natural length
-    spriteEngine.drawFrame(
-      ctx,
-      activeFrame,
-      canvas.width / 2,
-      canvas.height / 2,
-      27,
-      0,
-      1.0,
-      1.0
-    );
-  }, [isOpen, activeFrame, lengthScale]);
+    const centerX = canvas.width / 2;
+    const centerY = canvas.height / 2;
+
+    if (previewMode === 'ghost') {
+      // Enhanced luminous ethereal blue glow aura
+      ctx.save();
+      ctx.shadowColor = '#0284c7';
+      ctx.shadowBlur = 38;
+      ctx.fillStyle = 'rgba(56, 189, 248, 0.32)';
+      ctx.beginPath();
+      ctx.ellipse(centerX, centerY, 46, 56, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+
+      // Radiant core glow
+      ctx.save();
+      ctx.shadowColor = '#38bdf8';
+      ctx.shadowBlur = 28;
+      const coreGrad = ctx.createRadialGradient(centerX, centerY, 6, centerX, centerY, 40);
+      coreGrad.addColorStop(0, 'rgba(224, 242, 254, 0.65)');
+      coreGrad.addColorStop(0.55, 'rgba(56, 189, 248, 0.45)');
+      coreGrad.addColorStop(1, 'rgba(14, 165, 233, 0)');
+      ctx.fillStyle = coreGrad;
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, 40, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+
+      // Draw spectral ghost sprite with lower opacity & radiant bloom
+      spriteEngine.drawFrame(
+        ctx,
+        activeFrame,
+        centerX,
+        centerY,
+        27,
+        0,
+        0.72, // Reduced opacity (โปร่งแสง)
+        1.0,
+        true
+      );
+    } else {
+      // Draw standard alive sprite
+      spriteEngine.drawFrame(
+        ctx,
+        activeFrame,
+        centerX,
+        centerY,
+        27,
+        0,
+        1.0,
+        1.0,
+        false
+      );
+    }
+  }, [isOpen, activeFrame, lengthScale, previewMode]);
 
   if (!isOpen) return null;
 
@@ -140,6 +184,32 @@ export const SpriteModal: React.FC<SpriteModalProps> = ({
 
         {/* Live Animation Preview Box (Proportional Height to avoid squishing) */}
         <div className="flex flex-col items-center justify-center p-3.5 bg-black/50 border border-amber-900/50 rounded-2xl mb-3.5">
+          {/* Preview Mode Selector: Alive vs Ghost */}
+          <div className="flex items-center gap-1.5 mb-2.5 bg-zinc-900/90 p-1 rounded-xl border border-zinc-800">
+            <button
+              onClick={() => setPreviewMode('alive')}
+              className={`flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-bold transition ${
+                previewMode === 'alive'
+                  ? 'bg-amber-600 text-white shadow'
+                  : 'text-zinc-400 hover:text-white'
+              }`}
+            >
+              <Bug className="w-3.5 h-3.5" />
+              <span>{isEn ? 'Normal Sprite' : 'ตัวปกติ'}</span>
+            </button>
+            <button
+              onClick={() => setPreviewMode('ghost')}
+              className={`flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-bold transition ${
+                previewMode === 'ghost'
+                  ? 'bg-sky-600 text-white shadow'
+                  : 'text-zinc-400 hover:text-white'
+              }`}
+            >
+              <GhostIcon className="w-3.5 h-3.5 text-sky-200" />
+              <span>{isEn ? 'Ghost Tone (ตอนตาย)' : 'โทนฟ้าตอนตาย'}</span>
+            </button>
+          </div>
+
           <div className="relative w-40 h-48 rounded-2xl overflow-hidden border-2 border-amber-500/30 shadow-inner bg-[#b09477]">
             <canvas
               ref={previewCanvasRef}
@@ -155,7 +225,11 @@ export const SpriteModal: React.FC<SpriteModalProps> = ({
           <div className="text-xs font-semibold text-amber-200 mt-2 flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
             <span>
-              {hasCustom
+              {previewMode === 'ghost'
+                ? isEn
+                  ? 'Spectral Ghost Color Active on Death'
+                  : 'สีวิญญาณเรืองแสงใช้ตอนตายและลอยสู่สุคติ'
+                : hasCustom
                 ? isEn
                   ? 'Custom Uploaded Spritesheet Active'
                   : 'กำลังใช้งานสไปร์ทชีทที่อัปโหลด'
@@ -261,18 +335,29 @@ export const SpriteModal: React.FC<SpriteModalProps> = ({
         {/* 8 Frames Strip Gallery */}
         <div className="mb-3.5">
           <div className="text-[11px] font-semibold text-amber-300/80 mb-1">
-            {isEn ? 'Animation Frames (4x2):' : 'ภาพเฟรมทั้งหมด (4x2):'}
+            {previewMode === 'ghost'
+              ? isEn
+                ? 'Spectral Ghost Frames (ตอนตาย 4x2):'
+                : 'เฟรมวิญญาณตอนตาย (4x2):'
+              : isEn
+              ? 'Animation Frames (4x2):'
+              : 'ภาพเฟรมทั้งหมด (4x2):'}
           </div>
           <div className="grid grid-cols-4 gap-1.5 bg-black/40 p-2 rounded-xl border border-amber-950">
             {[0, 1, 2, 3, 4, 5, 6, 7].map((idx) => {
-              const frameCanvas = spriteEngine.getFrameCanvas(idx);
+              const frameCanvas =
+                previewMode === 'ghost'
+                  ? spriteEngine.getGhostFrameCanvas(idx) || spriteEngine.getFrameCanvas(idx)
+                  : spriteEngine.getFrameCanvas(idx);
               const isActive = activeFrame === idx;
               return (
                 <div
                   key={idx}
                   className={`aspect-[3/4] rounded-lg flex items-center justify-center p-1 bg-amber-950/40 border transition ${
                     isActive
-                      ? 'border-amber-400 bg-amber-800/40 shadow-sm ring-2 ring-amber-400/50'
+                      ? previewMode === 'ghost'
+                        ? 'border-cyan-400 bg-cyan-950/40 shadow-sm ring-2 ring-cyan-400/50'
+                        : 'border-amber-400 bg-amber-800/40 shadow-sm ring-2 ring-amber-400/50'
                       : 'border-zinc-800'
                   }`}
                 >

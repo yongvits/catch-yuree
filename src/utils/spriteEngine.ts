@@ -9,6 +9,7 @@ export interface SpriteSheetData {
 
 class SpriteEngine {
   private frames: HTMLCanvasElement[] = [];
+  private ghostFrames: HTMLCanvasElement[] = [];
   private isLoaded = false;
   private customImageSrc: string | null = null;
   private customLengthScale = 1.0;
@@ -160,6 +161,7 @@ class SpriteEngine {
 
         if (newFrames.length === totalFrames) {
           this.frames = newFrames;
+          this.ghostFrames = this.generateGhostFrames(newFrames);
           this.isLoaded = true;
           this.customImageSrc = dataUrl;
           this.notifyLoaded();
@@ -170,6 +172,65 @@ class SpriteEngine {
       };
       img.onerror = () => resolve(false);
       img.src = dataUrl;
+    });
+  }
+
+  // Convert character frames into a glowing spectral ghost palette in distinct blue tones (โทนฟ้า)
+  private generateGhostFrames(sourceFrames: HTMLCanvasElement[]): HTMLCanvasElement[] {
+    return sourceFrames.map((frame) => {
+      const gCanvas = document.createElement('canvas');
+      gCanvas.width = frame.width;
+      gCanvas.height = frame.height;
+      const gCtx = gCanvas.getContext('2d', { willReadFrequently: true });
+      if (!gCtx) return frame;
+
+      gCtx.drawImage(frame, 0, 0);
+
+      try {
+        const imgData = gCtx.getImageData(0, 0, frame.width, frame.height);
+        const data = imgData.data;
+
+        for (let i = 0; i < data.length; i += 4) {
+          const r = data[i];
+          const g = data[i + 1];
+          const b = data[i + 2];
+          const a = data[i + 3];
+
+          if (a > 15) {
+            // Perceived luminance
+            const luma = 0.299 * r + 0.587 * g + 0.114 * b;
+
+            // Transform into distinct, glowing ethereal blue ghost spectrum (โทนออกฟ้า + โปร่งแสง):
+            if (luma > 190) {
+              // Bright highlights -> glowing celestial crystal icy blue / celestial white-blue
+              const factor = (luma - 190) / 65;
+              data[i] = Math.round(180 + factor * 65);     // R: 180 -> 245
+              data[i + 1] = Math.round(225 + factor * 25); // G: 225 -> 250
+              data[i + 2] = 255;                           // B: 255
+              data[i + 3] = Math.round(a * 0.78);          // Lower opacity for ethereal ghost transparency
+            } else if (luma > 75) {
+              // Body / shell / fluff / limbs -> distinct sky blue / electric spirit blue (#38bdf8 / #60a5fa)
+              const factor = (luma - 75) / 115; // 0 to 1
+              data[i] = Math.round(40 + factor * 115);     // R: 40 -> 155
+              data[i + 1] = Math.round(135 + factor * 75); // G: 135 -> 210
+              data[i + 2] = Math.round(235 + factor * 20); // B: 235 -> 255 (dominant vivid blue)
+              data[i + 3] = Math.round(a * 0.72);          // Lower opacity for ethereal ghost transparency
+            } else {
+              // Outlines / snout / eyes / details -> deep royal spirit sapphire blue (#0369a1 to #1e3a8a)
+              const darkFactor = luma / 75; // 0 to 1
+              data[i] = Math.round(10 + darkFactor * 25);    // R: 10 -> 35
+              data[i + 1] = Math.round(40 + darkFactor * 65);// G: 40 -> 105
+              data[i + 2] = Math.round(150 + darkFactor * 75);// B: 150 -> 225 (vibrant deep blue)
+              data[i + 3] = Math.round(a * 0.75);          // Lower opacity for ethereal ghost transparency
+            }
+          }
+        }
+        gCtx.putImageData(imgData, 0, 0);
+      } catch {
+        // Fallback
+      }
+
+      return gCanvas;
     });
   }
 
@@ -522,10 +583,11 @@ class SpriteEngine {
     }
 
     this.frames = newFrames;
+    this.ghostFrames = this.generateGhostFrames(newFrames);
     this.isLoaded = true;
   }
 
-  // Draw animated weevil frame onto target canvas
+  // Draw animated weevil frame onto target canvas (isGhost = true for spectral spirit colors)
   public drawFrame(
     ctx: CanvasRenderingContext2D,
     frameIndex: number,
@@ -534,11 +596,13 @@ class SpriteEngine {
     size: number,
     rotation: number,
     opacity = 1.0,
-    scale = 1.0
+    scale = 1.0,
+    isGhost = false
   ) {
-    if (this.frames.length === 0) return;
+    const frameList = isGhost && this.ghostFrames.length > 0 ? this.ghostFrames : this.frames;
+    if (frameList.length === 0) return;
 
-    const frame = this.frames[frameIndex % this.frames.length];
+    const frame = frameList[frameIndex % frameList.length];
     if (!frame) return;
 
     ctx.save();
@@ -551,7 +615,24 @@ class SpriteEngine {
     const nativeAspect = (frame.height || 1) / (frame.width || 1);
     const renderWidth = size * 2.8;
     const renderHeight = renderWidth * nativeAspect * this.customLengthScale;
+
+    if (isGhost) {
+      ctx.shadowColor = '#38bdf8';
+      ctx.shadowBlur = 36;
+    }
+
     ctx.drawImage(frame, -renderWidth / 2, -renderHeight / 2, renderWidth, renderHeight);
+
+    if (isGhost) {
+      // Radiant luminous glow bloom pass with additive lighting
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = opacity * 0.45;
+      ctx.shadowColor = '#bae6fd';
+      ctx.shadowBlur = 24;
+      ctx.drawImage(frame, -renderWidth / 2, -renderHeight / 2, renderWidth, renderHeight);
+      ctx.restore();
+    }
 
     ctx.restore();
   }
@@ -570,6 +651,10 @@ class SpriteEngine {
 
   public getFrameCanvas(idx: number): HTMLCanvasElement | null {
     return this.frames[idx] || null;
+  }
+
+  public getGhostFrameCanvas(idx: number): HTMLCanvasElement | null {
+    return this.ghostFrames[idx] || null;
   }
 }
 

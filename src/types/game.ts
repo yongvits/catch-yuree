@@ -30,6 +30,7 @@ export interface Ghost {
   id: number;
   x: number;
   y: number;
+  frameIndex?: number;
   floatSpeed: number;
   zoomSpeed: number;
   scale: number;
