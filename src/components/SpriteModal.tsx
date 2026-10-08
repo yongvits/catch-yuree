@@ -24,7 +24,7 @@ export const SpriteModal: React.FC<SpriteModalProps> = ({
   const [statusMsg, setStatusMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [showGuide, setShowGuide] = useState(false);
   const [lengthScale, setLengthScale] = useState(spriteEngine.getLengthScale());
-  const [previewMode, setPreviewMode] = useState<'alive' | 'ghost'>('ghost'); // Default shows ghost to let user see ghost palette
+  const [previewMode, setPreviewMode] = useState<'alive' | 'ghost'>('alive'); // Default shows normal alive character
   const previewCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
   // Sync length scale on open
@@ -167,6 +167,38 @@ export const SpriteModal: React.FC<SpriteModalProps> = ({
     setIsDragging(false);
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       handleFileUpload(e.dataTransfer.files[0]);
+    }
+  };
+
+  const handleLoadUploadedPreset = async () => {
+    setIsProcessing(true);
+    setStatusMsg(null);
+    try {
+      const ok = await spriteEngine.loadPresetSkin();
+      if (ok) {
+        setHasCustom(true);
+        setStatusMsg({
+          type: 'success',
+          text: isEn
+            ? '✓ Character skin loaded from repository!'
+            : '✓ โหลดรูปภาพตัวละคร (รูปที่ 2) สำเร็จเรียบร้อย!',
+        });
+        onSpriteUpdated();
+      } else {
+        setStatusMsg({
+          type: 'error',
+          text: isEn
+            ? 'Uploaded skin file not found in public folder.'
+            : 'ไม่พบไฟล์รูปภาพสกินในโฟลเดอร์ public',
+        });
+      }
+    } catch (err: any) {
+      setStatusMsg({
+        type: 'error',
+        text: err?.message || 'Error loading skin',
+      });
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -331,6 +363,22 @@ export const SpriteModal: React.FC<SpriteModalProps> = ({
               </button>
             </div>
           </div>
+        </div>
+
+        {/* Quick Apply Button for Uploaded Skin (Photo 2) */}
+        <div className="mb-3.5">
+          <button
+            onClick={handleLoadUploadedPreset}
+            disabled={isProcessing}
+            className="w-full py-2.5 px-3 rounded-2xl bg-gradient-to-r from-pink-600 via-rose-600 to-amber-600 hover:from-pink-500 hover:to-amber-500 active:scale-98 text-white text-xs font-bold shadow-lg transition flex items-center justify-center gap-2 border border-pink-400/40 cursor-pointer disabled:opacity-50"
+          >
+            <Sparkles className="w-4 h-4 text-amber-200" />
+            <span>
+              {isEn
+                ? '✨ Load Uploaded Character Skin (Photo 2)'
+                : '✨ สลับใช้รูปตัวละครที่อัปโหลด (รูปที่ 2)'}
+            </span>
+          </button>
         </div>
 
         {/* Tap/Drop Upload Box with Native Transparent Input for 100% iOS/Android Reliability */}

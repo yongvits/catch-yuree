@@ -118,7 +118,7 @@ class SpriteEngine {
     return this.customLengthScale;
   }
 
-  // Load custom sprite in priority order: localStorage -> IndexedDB -> Bundled skin file
+  // Load custom sprite in priority order: localStorage -> IndexedDB -> Bundled skin files in public
   private async initSpriteCascade() {
     // 1. Try localStorage
     try {
@@ -149,44 +149,101 @@ class SpriteEngine {
       // ignore
     }
 
-    // 3. Try bundled skins in public folder (weevil_skin.png, yuree.png, spritesheet.png)
+    // 3. Try bundled skins in public folder (uploaded character sprite 0E437456..., weevil_skin.png, yuree.png)
+    await this.loadPresetSkin();
+  }
+
+  // Attempts to load candidate bundled character skins from public directory
+  public async loadPresetSkin(): Promise<boolean> {
     const base = import.meta.env.BASE_URL || './';
+    const originPath =
+      typeof window !== 'undefined'
+        ? window.location.pathname.replace(/\/[^/]*$/, '/')
+        : '/';
+
     const candidates = [
+      // Primary: Exact filename uploaded by user
+      `${originPath}0E437456-E0D9-44E6-A2BC-3D63910CD8FE.png`,
+      `${base}0E437456-E0D9-44E6-A2BC-3D63910CD8FE.png`,
+      `./0E437456-E0D9-44E6-A2BC-3D63910CD8FE.png`,
+      `0E437456-E0D9-44E6-A2BC-3D63910CD8FE.png`,
+      `/0E437456-E0D9-44E6-A2BC-3D63910CD8FE.png`,
+      // Secondary: standard clean skin names
+      `${originPath}weevil_skin.png`,
       `${base}weevil_skin.png`,
+      `./weevil_skin.png`,
+      `weevil_skin.png`,
+      `/weevil_skin.png`,
+      `${originPath}yuree.png`,
       `${base}yuree.png`,
+      `./yuree.png`,
+      `yuree.png`,
+      `/yuree.png`,
+      // Subpath fallbacks for GitHub Pages repo name
+      `/catch-yuree/0E437456-E0D9-44E6-A2BC-3D63910CD8FE.png`,
+      `/catch-yuree/weevil_skin.png`,
+      `/catch-yuree/yuree.png`,
       `${base}spritesheet.png`,
-      './weevil_skin.png',
-      './yuree.png',
-      './spritesheet.png',
-      '/weevil_skin.png',
+      `./spritesheet.png`,
     ];
 
-    for (const url of candidates) {
+    const uniqueCandidates = Array.from(new Set(candidates));
+
+    for (const url of uniqueCandidates) {
       try {
-        const resp = await fetch(url, { method: 'HEAD' });
-        if (resp.ok) {
-          const loaded = await this.loadFromUrl(url);
-          if (loaded) return;
+        const ok = await this.loadFromUrl(url);
+        if (ok) {
+          // Cache in IDB & localStorage for instantaneous reload
+          if (this.customImageSrc) {
+            try {
+              localStorage.setItem('weevil_custom_spritesheet', this.customImageSrc);
+            } catch {
+              // ignore
+            }
+            saveToIDB(this.customImageSrc);
+          }
+          return true;
         }
       } catch {
         // continue
       }
     }
+    return false;
   }
 
   public loadFromUrl(url: string): Promise<boolean> {
     return new Promise((resolve) => {
       const img = new Image();
-      img.crossOrigin = 'anonymous';
+      // DO NOT set crossOrigin for relative or local images to avoid CORS block on GitHub Pages!
+      if (url.startsWith('http://') || url.startsWith('https://')) {
+        img.crossOrigin = 'anonymous';
+      }
       img.onload = () => {
-        const canvas = document.createElement('canvas');
-        canvas.width = img.width;
-        canvas.height = img.height;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return resolve(false);
-        ctx.drawImage(img, 0, 0);
-        const dataUrl = canvas.toDataURL('image/png');
-        this.loadFromDataUrl(dataUrl).then(resolve);
+        try {
+          const maxDim = 1024;
+          let w = img.width;
+          let h = img.height;
+          if (w > maxDim || h > maxDim) {
+            if (w > h) {
+              h = Math.round((h * maxDim) / w);
+              w = maxDim;
+            } else {
+              w = Math.round((w * maxDim) / h);
+              h = maxDim;
+            }
+          }
+
+          const canvas = document.createElement('canvas');
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) return resolve(false);
+          ctx.drawImage(img, 0, 0, w, h);
+          const dataUrl = canvas.toDataURL('image/png');
+          this.loadFromDataUrl(dataUrl).then(resolve);
+        } catch {
+          resolve(false);
+        }
       };
       img.onerror = () => resolve(false);
       img.src = url;
