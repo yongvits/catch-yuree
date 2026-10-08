@@ -52,7 +52,13 @@ export const GameHUD: React.FC<GameHUDProps> = ({
       {/* Top Left Floating Bar */}
       <div className="absolute top-3 left-3 md:top-4 md:left-4 z-20 flex flex-wrap items-center gap-2 pointer-events-none">
         {/* Weevil Remaining Counter (Clean - No icon) */}
-        <div className="bg-black/75 backdrop-blur-md border border-amber-500/20 px-3.5 py-1.5 rounded-full shadow-lg flex items-center gap-2 pointer-events-auto text-xs md:text-sm">
+        <div
+          onClick={isInterfaceHidden ? onUnhideInterface : undefined}
+          title={isInterfaceHidden ? t.hudHiddenNotice : undefined}
+          className={`bg-black/75 backdrop-blur-md border border-amber-500/20 px-3.5 py-1.5 rounded-full shadow-lg flex items-center gap-2 pointer-events-auto text-xs md:text-sm transition ${
+            isInterfaceHidden ? 'cursor-pointer hover:border-amber-400/50' : ''
+          }`}
+        >
           <span className="font-bold text-amber-300">{t.hudRemaining}</span>
           <span className="font-black text-white">
             <span className="text-amber-400 text-sm md:text-base font-mono">{remainingCount}</span> /{' '}

@@ -78,8 +78,8 @@ export default function App() {
     accuracy: 0,
   });
 
-  // Interface visibility (Hide all except time and remaining count)
-  const [isInterfaceHidden, setIsInterfaceHidden] = useState(false);
+  // Interface visibility (Hide all except time and remaining count by default)
+  const [isInterfaceHidden, setIsInterfaceHidden] = useState(true);
   const [showUnhideHint, setShowUnhideHint] = useState(false);
   const hintTimerRef = useRef<number | null>(null);
 
