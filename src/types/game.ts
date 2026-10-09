@@ -64,6 +64,17 @@ export interface FloatingText {
   vy: number;
 }
 
+export interface HerbItem {
+  id: number;
+  x: number;
+  y: number;
+  rotation: number;
+  scale: number;
+  frameIndex: number; // 0..11 (0-3: chili, 4-7: lime leaf, 8-11: garlic)
+  category: 'chili' | 'lime' | 'garlic';
+  isForeground: boolean;
+}
+
 export type GameDifficulty = 'easy' | 'normal' | 'hard' | 'extreme';
 
 export interface DifficultyConfig {

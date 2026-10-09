@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useCallback } from 'react';
-import { RiceGrain, Weevil, Ghost, Particle, FloatingText } from '../types/game';
+import { RiceGrain, Weevil, Ghost, Particle, FloatingText, HerbItem } from '../types/game';
 import { soundManager } from '../audio/soundManager';
 import { spriteEngine } from '../utils/spriteEngine';
+import { herbEngine } from '../utils/herbEngine';
 
 interface WeevilCanvasProps {
   totalCount: number;
@@ -33,6 +34,7 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
     particles: [] as Particle[],
     floatingTexts: [] as FloatingText[],
     riceGrains: [] as RiceGrain[],
+    herbs: [] as HerbItem[],
     bgCanvas: null as HTMLCanvasElement | null,
     fgCanvas: null as HTMLCanvasElement | null,
     totalCount: totalCount,
@@ -84,6 +86,71 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
       });
     }
     stateRef.current.riceGrains = grains;
+  }, []);
+
+  // 1.5 Generate scattered herbs (Chili, Kaffir Lime, Garlic) matching traditional rice sack repellents
+  const generateHerbs = useCallback((width: number, height: number) => {
+    const items: HerbItem[] = [];
+    const count = Math.max(7, Math.min(12, Math.floor((width * height) / 85000) + 4));
+    const pad = 48;
+
+    // Guaranteed diverse mix of chilies (0..3), kaffir lime leaves (4..7), and garlic cloves (8..11)
+    const herbPool: { frame: number; cat: 'chili' | 'lime' | 'garlic'; baseScale: number }[] = [];
+
+    // Guarantee at least two of each category:
+    herbPool.push({ frame: Math.floor(Math.random() * 4), cat: 'chili', baseScale: 1.05 });
+    herbPool.push({ frame: Math.floor(Math.random() * 4), cat: 'chili', baseScale: 0.95 });
+    herbPool.push({ frame: 4 + Math.floor(Math.random() * 4), cat: 'lime', baseScale: 1.0 });
+    herbPool.push({ frame: 4 + Math.floor(Math.random() * 4), cat: 'lime', baseScale: 1.1 });
+    herbPool.push({ frame: 8 + Math.floor(Math.random() * 4), cat: 'garlic', baseScale: 0.9 });
+    herbPool.push({ frame: 8 + Math.floor(Math.random() * 4), cat: 'garlic', baseScale: 1.0 });
+
+    while (herbPool.length < count) {
+      const r = Math.random();
+      if (r < 0.35) {
+        herbPool.push({ frame: Math.floor(Math.random() * 4), cat: 'chili', baseScale: 0.9 + Math.random() * 0.25 });
+      } else if (r < 0.7) {
+        herbPool.push({ frame: 4 + Math.floor(Math.random() * 4), cat: 'lime', baseScale: 0.95 + Math.random() * 0.25 });
+      } else {
+        herbPool.push({ frame: 8 + Math.floor(Math.random() * 4), cat: 'garlic', baseScale: 0.85 + Math.random() * 0.25 });
+      }
+    }
+
+    for (let i = 0; i < herbPool.length; i++) {
+      const hInfo = herbPool[i];
+      let hx = 0;
+      let hy = 0;
+      let attempts = 0;
+      let tooClose = true;
+
+      while (tooClose && attempts < 150) {
+        hx = pad + Math.random() * (width - pad * 2);
+        hy = pad + Math.random() * (height - pad * 2);
+        tooClose = false;
+
+        for (let j = 0; j < items.length; j++) {
+          const other = items[j];
+          if (Math.hypot(hx - other.x, hy - other.y) < 100) {
+            tooClose = true;
+            break;
+          }
+        }
+        attempts++;
+      }
+
+      items.push({
+        id: i + 1,
+        x: hx,
+        y: hy,
+        rotation: Math.random() * Math.PI * 2,
+        scale: hInfo.baseScale,
+        frameIndex: hInfo.frame,
+        category: hInfo.cat,
+        isForeground: i % 2 === 0, // Half nestled in background under grains, half resting on top!
+      });
+    }
+
+    stateRef.current.herbs = items;
   }, []);
 
   // 2. Render single rice grain
@@ -159,6 +226,13 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
       const targetCtx = g.isForeground ? fgCtx : bgCtx;
       drawRiceGrain(targetCtx, g);
     });
+
+    // Draw background herbs (nestled underneath foreground rice grains)
+    stateRef.current.herbs
+      .filter((h) => !h.isForeground)
+      .forEach((h) => {
+        herbEngine.drawHerb(bgCtx, h.frameIndex, h.x, h.y, 34 * h.scale, h.rotation);
+      });
   }, [initOffscreenCanvas]);
 
   // 4. Spawn weevils with non-overlapping initial distribution
@@ -446,19 +520,19 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
             addFloatingText(w.x, w.y, ascendedText, '#38bdf8');
           }
 
-          // Released ghost
+          // Released ghost (Slower, majestic floating, stays longer in air, peaceful fade)
           stateRef.current.ghostIdCounter++;
           stateRef.current.ghosts.push({
             id: stateRef.current.ghostIdCounter,
             x: w.x,
             y: w.y,
             frameIndex: Math.floor(w.legsPhase) % 8,
-            floatSpeed: 2.5 + Math.random() * 1.5,
-            zoomSpeed: 0.05 + Math.random() * 0.03,
+            floatSpeed: 0.65 + Math.random() * 0.35,
+            zoomSpeed: 0.0035 + Math.random() * 0.002,
             scale: 1.0,
             rotation: w.rotation,
-            opacity: 0.72,
-            fadeSpeed: 0.015 + Math.random() * 0.005,
+            opacity: 0.88,
+            fadeSpeed: 0.0035 + Math.random() * 0.0012,
             wavePhase: Math.random() * Math.PI,
             wingPhase: Math.random() * 10,
             size: w.size,
@@ -507,6 +581,31 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
           }
         });
       }
+
+      // Check if tap hit an herb item (gentle fragrant spark puff effect!)
+      stateRef.current.herbs.forEach((h) => {
+        const dist = Math.hypot(h.x - tapX, h.y - tapY);
+        if (dist < 42 * h.scale) {
+          const sparkColor =
+            h.category === 'chili'
+              ? '#ef4444' // Ruby chili spark
+              : h.category === 'lime'
+              ? '#84cc16' // Lime green zest
+              : '#fef08a'; // Garlic ivory essence
+          for (let p = 0; p < 8; p++) {
+            stateRef.current.particles.push({
+              x: h.x,
+              y: h.y,
+              vx: (Math.random() - 0.5) * 4.5,
+              vy: (Math.random() - 0.5) * 4.5 - 1.5,
+              size: 2.0 + Math.random() * 2.5,
+              color: sparkColor,
+              life: 1.0,
+              decay: 0.04 + Math.random() * 0.03,
+            });
+          }
+        }
+      });
     },
     [onCountChange, onVictory, onHit, onMiss]
   );
@@ -526,6 +625,7 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
     canvas.height = height;
 
     generateRiceGrains(width, height);
+    generateHerbs(width, height);
     renderOffscreenRice();
 
     if (oldWidth > 0 && oldHeight > 0) {
@@ -538,7 +638,7 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
         w.y = Math.max(w.size, Math.min(height - w.size, w.y));
       });
     }
-  }, [generateRiceGrains, renderOffscreenRice]);
+  }, [generateRiceGrains, generateHerbs, renderOffscreenRice]);
 
   // Main game update & loop
   useEffect(() => {
@@ -547,6 +647,10 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
 
     resizeGame();
     spawnWeevils(totalCount);
+
+    herbEngine.onLoaded(() => {
+      renderOffscreenRice();
+    });
 
     let animationId: number;
 
@@ -624,6 +728,20 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
             w.x += w.vx;
             w.y += w.vy;
 
+            // Natural herbal repellent behavior: weevils naturally steer away from pungent chili, garlic, and lime
+            for (let hi = 0; hi < stateRef.current.herbs.length; hi++) {
+              const herb = stateRef.current.herbs[hi];
+              const hdx = w.x - herb.x;
+              const hdy = w.y - herb.y;
+              const hDist = Math.hypot(hdx, hdy);
+              const repelRadius = 38 * herb.scale;
+              if (hDist < repelRadius && hDist > 0) {
+                const repelForce = ((repelRadius - hDist) / repelRadius) * 0.14;
+                w.vx += (hdx / hDist) * repelForce;
+                w.vy += (hdy / hDist) * repelForce;
+              }
+            }
+
             const pad = w.size;
             if (w.x < pad) {
               w.x = pad;
@@ -647,15 +765,15 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
             }
           }
 
-          // --- 3. Update Ghosts ---
+          // --- 3. Update Ghosts (Serene, gentle floating and slow fade) ---
           for (let i = ghosts.length - 1; i >= 0; i--) {
             const g = ghosts[i];
             g.y -= g.floatSpeed;
             g.scale += g.zoomSpeed;
             g.opacity -= g.fadeSpeed;
-            g.wavePhase += 0.04;
-            g.x += Math.sin(g.wavePhase) * 1.2;
-            g.wingPhase += 0.28;
+            g.wavePhase += 0.022;
+            g.x += Math.sin(g.wavePhase) * 0.65;
+            g.wingPhase += 0.16;
 
             if (g.opacity <= 0) {
               ghosts.splice(i, 1);
@@ -702,6 +820,13 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
         if (fgCanvas) {
           ctx.drawImage(fgCanvas, 0, 0);
         }
+
+        // 3.5 Foreground herbs (resting on top of rice grains for high visual clarity!)
+        stateRef.current.herbs
+          .filter((h) => h.isForeground)
+          .forEach((h) => {
+            herbEngine.drawHerb(ctx, h.frameIndex, h.x, h.y, 35 * h.scale, h.rotation);
+          });
 
         // 4. Bran burst particles
         particles.forEach((p) => {
