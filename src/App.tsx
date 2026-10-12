@@ -47,7 +47,6 @@ export default function App() {
     };
   }, [t]);
 
-  const [isLoading, setIsLoading] = useState(true);
   const [difficulty, setDifficulty] = useState<GameDifficulty>('normal');
   const [gameKey, setGameKey] = useState(0);
 
@@ -144,15 +143,6 @@ export default function App() {
     }
   });
 
-  // Loading screen dismissal
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsLoading(false);
-      // Wait for player to press Start button on Title Screen
-      setIsPlaying(false);
-    }, 600);
-    return () => clearTimeout(timer);
-  }, []);
 
   // Global drag & drop for spritesheet file
   useEffect(() => {
@@ -324,21 +314,6 @@ export default function App() {
 
   return (
     <div className="relative w-screen h-screen overflow-hidden select-none bg-[#1a0d05] font-['Kanit',sans-serif]">
-      {/* Loading Screen */}
-      {isLoading && (
-        <div
-          id="loading-screen"
-          className="absolute inset-0 bg-[#3a1c0e] flex flex-col justify-center items-center z-50 transition-opacity duration-500"
-        >
-          <div className="animate-pulse mb-4 text-6xl">🌾🐜👻🌾</div>
-          <h1 className="text-2xl font-extrabold text-amber-100 tracking-wider text-center px-4">
-            {t.loadingTitle}
-          </h1>
-          <p className="text-amber-200/60 mt-2 text-xs text-center">
-            {t.loadingSubtitle}
-          </p>
-        </div>
-      )}
 
       {/* Drag & drop overlay */}
       {isWindowDragging && (
@@ -408,7 +383,7 @@ export default function App() {
       )}
 
       {/* Title Screen Overlay before entering game (Clean title with Tap to Start) */}
-      {showTitleScreen && !isLoading && (
+      {showTitleScreen && (
         <TitleScreen onStartGame={handleStartGame} />
       )}
 
