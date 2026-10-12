@@ -51,17 +51,22 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
     lastActivityTime: performance.now(),
   });
 
-  // Reference for dragging chili, garlic, and kaffir lime leaf with long press
-  const herbHoldRef = useRef<{
-    herbId: number;
-    pointerId: number | 'mouse';
-    startX: number;
-    startY: number;
-    offsetX: number;
-    offsetY: number;
-    timer: number | null;
-    isDragging: boolean;
-  } | null>(null);
+  // Multi-touch reference for dragging chili, garlic, and kaffir lime leaf simultaneously
+  const activeHerbHoldsRef = useRef<
+    Map<
+      number | 'mouse',
+      {
+        herbId: number;
+        pointerId: number | 'mouse';
+        startX: number;
+        startY: number;
+        offsetX: number;
+        offsetY: number;
+        timer: number | null;
+        isDragging: boolean;
+      }
+    >
+  >(new Map());
 
   // Setup offscreen canvas
   const initOffscreenCanvas = useCallback(() => {
@@ -381,72 +386,79 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
     ctx.fill();
     ctx.restore();
 
-    // --- 2. TRANSLUCENT ANGELIC FAIRY WINGS (สลับปีกกลับด้านมาทางหัว และให้อยู่กลางตัว) ---
-    // Wings attached at exact body center (y = 0) and oriented towards the head
-    const wingWiggle = Math.sin(g.wingPhase) * 0.28;
-    const wingSpan = size * 1.35;
+    // --- 2. TRANSLUCENT ANGELIC FAIRY WINGS (ปีกขนาดกะทัดรัด น่ารัก เล็กลง 1 เท่า สมดุลกับตัวมอด) ---
+    // The weevil sprite body rendered width is ~size * 2.8
+    const bodyWidth = size * 2.8;
+    const wingWiggle = Math.sin(g.wingPhase) * 0.32;
+    const wingSpan = bodyWidth * 0.68; // ปีกเล็กลง 1 เท่า (กะทัดรัด น่ารัก พอดีตัว)
+    const wingAttachX = bodyWidth * 0.28; // ตำแหน่งโคนปีกชิดลำตัวพอดี
+    const wingAttachY = -size * 0.12; // เยื้องไปทางหัวเล็กน้อย
 
-    // Left Wing (Attached on left center body, spreading gracefully outwards toward head)
+    // Left Wing (Attached on left side of body, spreading gracefully outwards toward head)
     ctx.save();
-    ctx.translate(-size * 0.32, 0); // อยู่กลางตัว
-    ctx.rotate(-(Math.PI - 0.52) + wingWiggle); // สลับด้านมาทางหัว
-    ctx.fillStyle = `rgba(56, 189, 248, ${0.52 * smoothAlpha})`;
-    ctx.strokeStyle = `rgba(186, 230, 253, ${0.90 * smoothAlpha})`;
-    ctx.lineWidth = size * 0.08;
+    ctx.translate(-wingAttachX, wingAttachY);
+    ctx.rotate(-(Math.PI - 0.55) + wingWiggle);
+    ctx.fillStyle = `rgba(56, 189, 248, ${0.58 * smoothAlpha})`;
+    ctx.strokeStyle = `rgba(186, 230, 253, ${0.95 * smoothAlpha})`;
+    ctx.lineWidth = bodyWidth * 0.028;
     ctx.shadowColor = '#38bdf8';
-    ctx.shadowBlur = Math.round(22 * smoothAlpha);
+    ctx.shadowBlur = Math.round(18 * smoothAlpha);
 
     // Primary wing blade
     ctx.beginPath();
-    ctx.ellipse(wingSpan * 0.48, 0, wingSpan * 0.52, wingSpan * 0.28, -0.15, 0, Math.PI * 2);
+    ctx.ellipse(wingSpan * 0.48, 0, wingSpan * 0.52, wingSpan * 0.26, -0.12, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
 
     // Secondary fairy winglet lobe
-    ctx.fillStyle = `rgba(125, 211, 252, ${0.38 * smoothAlpha})`;
+    ctx.fillStyle = `rgba(125, 211, 252, ${0.42 * smoothAlpha})`;
     ctx.beginPath();
-    ctx.ellipse(wingSpan * 0.36, wingSpan * 0.14, wingSpan * 0.34, wingSpan * 0.18, 0.2, 0, Math.PI * 2);
+    ctx.ellipse(wingSpan * 0.38, wingSpan * 0.16, wingSpan * 0.38, wingSpan * 0.19, 0.18, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
 
-    // Inner glowing wing vein
-    ctx.strokeStyle = `rgba(240, 249, 255, ${0.80 * smoothAlpha})`;
-    ctx.lineWidth = size * 0.035;
+    // Inner glowing wing veins
+    ctx.strokeStyle = `rgba(240, 249, 255, ${0.85 * smoothAlpha})`;
+    ctx.lineWidth = bodyWidth * 0.015;
     ctx.beginPath();
     ctx.moveTo(0, 0);
-    ctx.quadraticCurveTo(wingSpan * 0.3, -wingSpan * 0.05, wingSpan * 0.85, 0);
+    ctx.quadraticCurveTo(wingSpan * 0.3, -wingSpan * 0.06, wingSpan * 0.88, 0);
+    ctx.moveTo(0, 0);
+    ctx.quadraticCurveTo(wingSpan * 0.25, wingSpan * 0.08, wingSpan * 0.65, wingSpan * 0.16);
     ctx.stroke();
     ctx.restore();
 
-    // Right Wing (Attached on right center body, spreading gracefully outwards toward head)
+    // Right Wing (Attached on right side of body, spreading gracefully outwards toward head)
     ctx.save();
-    ctx.translate(size * 0.32, 0); // อยู่กลางตัว
-    ctx.rotate(-0.52 - wingWiggle); // สลับด้านมาทางหัว
-    ctx.fillStyle = `rgba(56, 189, 248, ${0.52 * smoothAlpha})`;
-    ctx.strokeStyle = `rgba(186, 230, 253, ${0.90 * smoothAlpha})`;
-    ctx.lineWidth = size * 0.08;
+    ctx.translate(wingAttachX, wingAttachY);
+    ctx.rotate(-0.55 - wingWiggle);
+    ctx.fillStyle = `rgba(56, 189, 248, ${0.58 * smoothAlpha})`;
+    ctx.strokeStyle = `rgba(186, 230, 253, ${0.95 * smoothAlpha})`;
+    ctx.lineWidth = bodyWidth * 0.028;
     ctx.shadowColor = '#38bdf8';
-    ctx.shadowBlur = Math.round(22 * smoothAlpha);
+    ctx.shadowBlur = Math.round(18 * smoothAlpha);
 
     // Primary wing blade
     ctx.beginPath();
-    ctx.ellipse(wingSpan * 0.48, 0, wingSpan * 0.52, wingSpan * 0.28, 0.15, 0, Math.PI * 2);
+    ctx.ellipse(wingSpan * 0.48, 0, wingSpan * 0.52, wingSpan * 0.26, 0.12, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
 
     // Secondary fairy winglet lobe
-    ctx.fillStyle = `rgba(125, 211, 252, ${0.38 * smoothAlpha})`;
+    ctx.fillStyle = `rgba(125, 211, 252, ${0.42 * smoothAlpha})`;
     ctx.beginPath();
-    ctx.ellipse(wingSpan * 0.36, -wingSpan * 0.14, wingSpan * 0.34, wingSpan * 0.18, -0.2, 0, Math.PI * 2);
+    ctx.ellipse(wingSpan * 0.38, -wingSpan * 0.16, wingSpan * 0.38, wingSpan * 0.19, -0.18, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
 
-    // Inner glowing wing vein
-    ctx.strokeStyle = `rgba(240, 249, 255, ${0.80 * smoothAlpha})`;
-    ctx.lineWidth = size * 0.035;
+    // Inner glowing wing veins
+    ctx.strokeStyle = `rgba(240, 249, 255, ${0.85 * smoothAlpha})`;
+    ctx.lineWidth = bodyWidth * 0.015;
     ctx.beginPath();
     ctx.moveTo(0, 0);
-    ctx.quadraticCurveTo(wingSpan * 0.3, wingSpan * 0.05, wingSpan * 0.85, 0);
+    ctx.quadraticCurveTo(wingSpan * 0.3, wingSpan * 0.06, wingSpan * 0.88, 0);
+    ctx.moveTo(0, 0);
+    ctx.quadraticCurveTo(wingSpan * 0.25, -wingSpan * 0.08, wingSpan * 0.65, -wingSpan * 0.16);
     ctx.stroke();
     ctx.restore();
 
@@ -744,17 +756,24 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
     };
   }, []);
 
-  // Check if pointer pressed on an herb to start long-press hold
+  // Check if pointer pressed on an herb to start long-press hold (supports multiple simultaneous fingers)
   const checkHerbStart = useCallback(
     (canvasX: number, canvasY: number, pointerId: number | 'mouse') => {
+      // Prevent picking an herb already held by another finger
+      const busyHerbIds = new Set<number>();
+      activeHerbHoldsRef.current.forEach((hold) => {
+        busyHerbIds.add(hold.herbId);
+      });
+
       const herbs = stateRef.current.herbs;
       let closestHerb: HerbItem | null = null;
       let minDist = Infinity;
 
       for (let i = herbs.length - 1; i >= 0; i--) {
         const h = herbs[i];
+        if (busyHerbIds.has(h.id)) continue;
         const dist = Math.hypot(h.x - canvasX, h.y - canvasY);
-        const grabRadius = 46 * h.scale;
+        const grabRadius = Math.max(55, 62 * h.scale); // Generous grab area for fingers
         if (dist < grabRadius && dist < minDist) {
           minDist = dist;
           closestHerb = h;
@@ -767,8 +786,9 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
         const offsetY = canvasY - closestHerb.y;
 
         const timer = window.setTimeout(() => {
-          if (herbHoldRef.current && herbHoldRef.current.herbId === targetId) {
-            herbHoldRef.current.isDragging = true;
+          const hold = activeHerbHoldsRef.current.get(pointerId);
+          if (hold && hold.herbId === targetId) {
+            hold.isDragging = true;
             const target = stateRef.current.herbs.find((h) => h.id === targetId);
             if (target) {
               target.isDragging = true;
@@ -783,9 +803,9 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
               createHerbSparks(target.x, target.y, target.category, 12);
             }
           }
-        }, 250); // 250ms long press
+        }, 160); // Fast & responsive 160ms hold for effortless multi-finger drag
 
-        herbHoldRef.current = {
+        activeHerbHoldsRef.current.set(pointerId, {
           herbId: targetId,
           pointerId,
           startX: canvasX,
@@ -794,21 +814,22 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
           offsetY,
           timer,
           isDragging: false,
-        };
+        });
       }
     },
     []
   );
 
-  // Dragging herb
-  const handleHerbMove = useCallback((canvasX: number, canvasY: number) => {
-    const hold = herbHoldRef.current;
+  // Dragging herb (supports multi-touch simultaneously)
+  const handleHerbMove = useCallback((canvasX: number, canvasY: number, pointerId: number | 'mouse') => {
+    const hold = activeHerbHoldsRef.current.get(pointerId);
     if (!hold) return;
 
     if (!hold.isDragging) {
-      if (Math.hypot(canvasX - hold.startX, canvasY - hold.startY) > 16) {
+      // Allow natural finger jitter/wobble while holding before drag engages
+      if (Math.hypot(canvasX - hold.startX, canvasY - hold.startY) > 36) {
         if (hold.timer) clearTimeout(hold.timer);
-        herbHoldRef.current = null;
+        activeHerbHoldsRef.current.delete(pointerId);
       }
       return;
     }
@@ -829,9 +850,9 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
     }
   }, []);
 
-  // Dropping herb
-  const handleHerbEnd = useCallback(() => {
-    const hold = herbHoldRef.current;
+  // Dropping herb (supports multi-touch)
+  const handleHerbEnd = useCallback((pointerId: number | 'mouse') => {
+    const hold = activeHerbHoldsRef.current.get(pointerId);
     if (!hold) return;
 
     if (hold.timer) {
@@ -854,7 +875,7 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
       }
     }
 
-    herbHoldRef.current = null;
+    activeHerbHoldsRef.current.delete(pointerId);
   }, []);
 
   // Main game update & loop
@@ -1107,11 +1128,12 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
             herbEngine.drawHerb(ctx, h.frameIndex, h.x, h.y, 35 * h.scale, h.rotation);
           });
 
-        // 3.8 Dragged herb (lifted above everything with elevated shadow & repellent aura)
-        const draggedHerb = stateRef.current.herbs.find((h) => h.isDragging);
-        if (draggedHerb) {
-          drawDraggedHerb(ctx, draggedHerb);
-        }
+        // 3.8 Dragged herbs (lifted above everything with elevated shadow & repellent aura, supports multi-touch)
+        stateRef.current.herbs
+          .filter((h) => h.isDragging)
+          .forEach((dh) => {
+            drawDraggedHerb(ctx, dh);
+          });
 
         // 4. Bran burst particles
         particles.forEach((p) => {
@@ -1147,15 +1169,38 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
     stateRef.current.animationFrameId = animationId;
 
     const handleGlobalMouseMove = (e: MouseEvent) => {
-      if (herbHoldRef.current && herbHoldRef.current.pointerId === 'mouse') {
+      if (activeHerbHoldsRef.current.has('mouse')) {
         const coords = getCanvasCoords(e.clientX, e.clientY);
-        handleHerbMove(coords.x, coords.y);
+        handleHerbMove(coords.x, coords.y, 'mouse');
       }
     };
 
     const handleGlobalMouseUp = () => {
-      if (herbHoldRef.current && herbHoldRef.current.pointerId === 'mouse') {
-        handleHerbEnd();
+      if (activeHerbHoldsRef.current.has('mouse')) {
+        handleHerbEnd('mouse');
+      }
+    };
+
+    const handleGlobalTouchMove = (e: TouchEvent) => {
+      if (activeHerbHoldsRef.current.size > 0) {
+        for (let i = 0; i < e.changedTouches.length; i++) {
+          const t = e.changedTouches[i];
+          if (activeHerbHoldsRef.current.has(t.identifier)) {
+            const coords = getCanvasCoords(t.clientX, t.clientY);
+            handleHerbMove(coords.x, coords.y, t.identifier);
+          }
+        }
+      }
+    };
+
+    const handleGlobalTouchEnd = (e: TouchEvent) => {
+      if (activeHerbHoldsRef.current.size > 0) {
+        for (let i = 0; i < e.changedTouches.length; i++) {
+          const t = e.changedTouches[i];
+          if (activeHerbHoldsRef.current.has(t.identifier)) {
+            handleHerbEnd(t.identifier);
+          }
+        }
       }
     };
 
@@ -1166,16 +1211,22 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
     window.addEventListener('resize', handleWindowResize);
     window.addEventListener('mousemove', handleGlobalMouseMove);
     window.addEventListener('mouseup', handleGlobalMouseUp);
+    window.addEventListener('touchmove', handleGlobalTouchMove, { passive: true });
+    window.addEventListener('touchend', handleGlobalTouchEnd, { passive: true });
+    window.addEventListener('touchcancel', handleGlobalTouchEnd, { passive: true });
 
     return () => {
       cancelAnimationFrame(animationId);
       window.removeEventListener('resize', handleWindowResize);
       window.removeEventListener('mousemove', handleGlobalMouseMove);
       window.removeEventListener('mouseup', handleGlobalMouseUp);
-      if (herbHoldRef.current?.timer) {
-        clearTimeout(herbHoldRef.current.timer);
-        herbHoldRef.current = null;
-      }
+      window.removeEventListener('touchmove', handleGlobalTouchMove);
+      window.removeEventListener('touchend', handleGlobalTouchEnd);
+      window.removeEventListener('touchcancel', handleGlobalTouchEnd);
+      activeHerbHoldsRef.current.forEach((hold) => {
+        if (hold.timer) clearTimeout(hold.timer);
+      });
+      activeHerbHoldsRef.current.clear();
     };
   }, [totalCount, isPaused, resizeGame, spawnWeevils, getCanvasCoords, handleHerbMove, handleHerbEnd]);
 
@@ -1185,63 +1236,53 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
       className="absolute inset-0 w-full h-full block cursor-crosshair touch-none select-none z-0"
       onMouseDown={(e) => {
         const coords = getCanvasCoords(e.clientX, e.clientY);
-        if (!herbHoldRef.current) {
-          checkHerbStart(coords.x, coords.y, 'mouse');
-        }
+        checkHerbStart(coords.x, coords.y, 'mouse');
         handleInput(e.clientX, e.clientY);
       }}
       onMouseMove={(e) => {
-        if (herbHoldRef.current && herbHoldRef.current.pointerId === 'mouse') {
+        if (activeHerbHoldsRef.current.has('mouse')) {
           const coords = getCanvasCoords(e.clientX, e.clientY);
-          handleHerbMove(coords.x, coords.y);
+          handleHerbMove(coords.x, coords.y, 'mouse');
         }
       }}
       onMouseUp={() => {
-        if (herbHoldRef.current && herbHoldRef.current.pointerId === 'mouse') {
-          handleHerbEnd();
+        if (activeHerbHoldsRef.current.has('mouse')) {
+          handleHerbEnd('mouse');
         }
       }}
       onTouchStart={(e) => {
-        // Multi-touch squashing: handle up to 4 simultaneous touch points
+        // Multi-touch squashing & multi-object dragging
         const touches = e.changedTouches;
         const count = Math.min(touches.length, 4);
         for (let i = 0; i < count; i++) {
           const t = touches[i];
           const coords = getCanvasCoords(t.clientX, t.clientY);
-          if (!herbHoldRef.current) {
-            checkHerbStart(coords.x, coords.y, t.identifier);
-          }
+          checkHerbStart(coords.x, coords.y, t.identifier);
           handleInput(t.clientX, t.clientY);
         }
       }}
       onTouchMove={(e) => {
-        if (!herbHoldRef.current) return;
         for (let i = 0; i < e.changedTouches.length; i++) {
           const t = e.changedTouches[i];
-          if (t.identifier === herbHoldRef.current.pointerId) {
+          if (activeHerbHoldsRef.current.has(t.identifier)) {
             const coords = getCanvasCoords(t.clientX, t.clientY);
-            handleHerbMove(coords.x, coords.y);
-            break;
+            handleHerbMove(coords.x, coords.y, t.identifier);
           }
         }
       }}
       onTouchEnd={(e) => {
-        if (!herbHoldRef.current) return;
         for (let i = 0; i < e.changedTouches.length; i++) {
           const t = e.changedTouches[i];
-          if (t.identifier === herbHoldRef.current.pointerId) {
-            handleHerbEnd();
-            break;
+          if (activeHerbHoldsRef.current.has(t.identifier)) {
+            handleHerbEnd(t.identifier);
           }
         }
       }}
       onTouchCancel={(e) => {
-        if (!herbHoldRef.current) return;
         for (let i = 0; i < e.changedTouches.length; i++) {
           const t = e.changedTouches[i];
-          if (t.identifier === herbHoldRef.current.pointerId) {
-            handleHerbEnd();
-            break;
+          if (activeHerbHoldsRef.current.has(t.identifier)) {
+            handleHerbEnd(t.identifier);
           }
         }
       }}

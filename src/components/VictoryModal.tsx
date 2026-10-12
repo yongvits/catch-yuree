@@ -1,5 +1,5 @@
 import React from 'react';
-import { Clock, Zap, Target, Star, RotateCcw, ArrowRight } from 'lucide-react';
+import { Star } from 'lucide-react';
 import { TranslationStrings } from '../i18n/translations';
 
 interface VictoryModalProps {
@@ -13,6 +13,7 @@ interface VictoryModalProps {
   onPlayAgain: () => void;
   onNextDifficulty?: () => void;
   hasNextDifficulty?: boolean;
+  onOpenTitle?: () => void;
 }
 
 export const VictoryModal: React.FC<VictoryModalProps> = ({
@@ -26,6 +27,7 @@ export const VictoryModal: React.FC<VictoryModalProps> = ({
   onPlayAgain,
   onNextDifficulty,
   hasNextDifficulty,
+  onOpenTitle,
 }) => {
   if (!isOpen) return null;
 
@@ -44,15 +46,13 @@ export const VictoryModal: React.FC<VictoryModalProps> = ({
   const isNewBest = bestTime === null || elapsedTime <= bestTime;
 
   return (
-    <div className="fixed inset-0 bg-amber-950/85 backdrop-blur-md flex flex-col justify-center items-center z-50 p-4 transition-all duration-300">
+    <div className="fixed inset-0 bg-amber-950/85 backdrop-blur-md flex flex-col justify-center items-center z-50 p-4 transition-all duration-300 font-['Kanit',sans-serif]">
       <div className="bg-gradient-to-b from-amber-900 to-amber-950 p-6 md:p-8 rounded-3xl border border-amber-500/40 shadow-2xl text-center max-w-sm md:max-w-md w-full relative overflow-hidden animate-in fade-in zoom-in-95 duration-300">
         {/* Glow ambient background */}
         <div className="absolute -top-16 -left-16 w-36 h-36 bg-amber-500/20 rounded-full blur-3xl pointer-events-none" />
         <div className="absolute -bottom-16 -right-16 w-36 h-36 bg-cyan-400/20 rounded-full blur-3xl pointer-events-none" />
 
-        <div className="text-5xl md:text-6xl mb-2 animate-bounce">🌾🏆✨</div>
-
-        <h2 className="text-2xl md:text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-amber-200 via-amber-300 to-amber-400">
+        <h2 className="text-2xl md:text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-amber-200 via-amber-300 to-amber-400 mt-2">
           {t.victoryTitle}
         </h2>
 
@@ -60,25 +60,25 @@ export const VictoryModal: React.FC<VictoryModalProps> = ({
           {t.victorySubtitle(totalWeevils)}
         </p>
 
-        {/* Stars rating */}
-        <div className="flex justify-center items-center gap-1.5 my-3.5">
+        {/* Stars rating (ONLY icons kept) */}
+        <div className="flex justify-center items-center gap-1.5 my-4">
           {[1, 2, 3].map((s) => (
             <Star
               key={s}
-              className={`w-7 h-7 md:w-8 md:h-8 transition-transform ${
+              className={`w-8 h-8 md:w-9 md:h-9 transition-transform ${
                 s <= stars
-                  ? 'text-amber-400 fill-amber-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.6)] scale-110'
-                  : 'text-amber-900 fill-amber-950/60'
+                  ? 'text-amber-400 fill-amber-400 drop-shadow-[0_0_10px_rgba(251,191,36,0.65)] scale-110'
+                  : 'text-amber-950/70 fill-amber-950/40 stroke-amber-900'
               }`}
             />
           ))}
         </div>
 
-        {/* Stats Grid */}
+        {/* Stats Grid (Icons removed) */}
         <div className="grid grid-cols-3 gap-2 bg-black/40 border border-amber-500/20 rounded-2xl p-3 my-3">
           <div className="flex flex-col items-center">
-            <span className="text-amber-400/80 text-[10px] md:text-xs flex items-center gap-1">
-              <Clock className="w-3 h-3" /> {t.victoryTime}
+            <span className="text-amber-400/80 text-[10px] md:text-xs font-semibold">
+              {t.victoryTime}
             </span>
             <span className="text-white font-mono font-bold text-xs md:text-sm mt-0.5">
               {formatSecs(elapsedTime)}
@@ -91,8 +91,8 @@ export const VictoryModal: React.FC<VictoryModalProps> = ({
           </div>
 
           <div className="flex flex-col items-center border-x border-amber-500/20">
-            <span className="text-amber-400/80 text-[10px] md:text-xs flex items-center gap-1">
-              <Zap className="w-3 h-3" /> {t.victoryCombo}
+            <span className="text-amber-400/80 text-[10px] md:text-xs font-semibold">
+              {t.victoryCombo}
             </span>
             <span className="text-white font-mono font-bold text-xs md:text-sm mt-0.5">
               x{maxCombo}
@@ -101,8 +101,8 @@ export const VictoryModal: React.FC<VictoryModalProps> = ({
           </div>
 
           <div className="flex flex-col items-center">
-            <span className="text-amber-400/80 text-[10px] md:text-xs flex items-center gap-1">
-              <Target className="w-3 h-3" /> {t.victoryAccuracy}
+            <span className="text-amber-400/80 text-[10px] md:text-xs font-semibold">
+              {t.victoryAccuracy}
             </span>
             <span className="text-white font-mono font-bold text-xs md:text-sm mt-0.5">
               {accuracy}%
@@ -111,23 +111,30 @@ export const VictoryModal: React.FC<VictoryModalProps> = ({
           </div>
         </div>
 
-        {/* Action Buttons */}
+        {/* Action Buttons (Icons removed) */}
         <div className="mt-4 flex flex-col sm:flex-row gap-2">
+          {onOpenTitle && (
+            <button
+              onClick={onOpenTitle}
+              className="flex-1 flex items-center justify-center bg-black/60 hover:bg-zinc-800 font-bold py-2.5 px-3 rounded-xl shadow-lg transition duration-200 active:scale-95 text-xs md:text-sm text-amber-200 border border-white/20"
+            >
+              <span>{t.titleReturnToTitle}</span>
+            </button>
+          )}
+
           <button
             onClick={onPlayAgain}
-            className="flex-1 flex items-center justify-center gap-1.5 bg-gradient-to-r from-amber-600 to-amber-800 hover:from-amber-500 hover:to-amber-700 font-bold py-2.5 px-4 rounded-xl shadow-lg transition duration-200 active:scale-95 text-xs md:text-sm text-white border border-amber-400/30"
+            className="flex-1 flex items-center justify-center bg-gradient-to-r from-amber-600 to-amber-800 hover:from-amber-500 hover:to-amber-700 font-bold py-2.5 px-4 rounded-xl shadow-lg transition duration-200 active:scale-95 text-xs md:text-sm text-white border border-amber-400/30"
           >
-            <RotateCcw className="w-4 h-4" />
             <span>{t.victoryPlayAgain}</span>
           </button>
 
           {hasNextDifficulty && (
             <button
               onClick={onNextDifficulty}
-              className="flex-1 flex items-center justify-center gap-1.5 bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-500 hover:to-teal-600 font-bold py-2.5 px-4 rounded-xl shadow-lg transition duration-200 active:scale-95 text-xs md:text-sm text-white border border-emerald-400/30"
+              className="flex-1 flex items-center justify-center bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-500 hover:to-teal-600 font-bold py-2.5 px-4 rounded-xl shadow-lg transition duration-200 active:scale-95 text-xs md:text-sm text-white border border-emerald-400/30"
             >
               <span>{t.victoryNextDiff}</span>
-              <ArrowRight className="w-4 h-4" />
             </button>
           )}
         </div>

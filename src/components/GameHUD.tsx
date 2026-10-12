@@ -18,6 +18,7 @@ interface GameHUDProps {
   onOpenSettings: () => void;
   onOpenKnowledge: () => void;
   onOpenSprite: () => void;
+  onOpenTitle?: () => void;
 }
 
 export const GameHUD: React.FC<GameHUDProps> = ({
@@ -37,6 +38,7 @@ export const GameHUD: React.FC<GameHUDProps> = ({
   onOpenSettings,
   onOpenKnowledge,
   onOpenSprite,
+  onOpenTitle,
 }) => {
   const [clickCount, setClickCount] = useState(0);
   const clickCountRef = useRef(0);
@@ -130,6 +132,17 @@ export const GameHUD: React.FC<GameHUDProps> = ({
         {/* Action Buttons (Rendered only when interface is not hidden) */}
         {!isInterfaceHidden && (
           <div className="flex flex-wrap items-center gap-1.5 pointer-events-auto">
+            {/* Title Screen */}
+            {onOpenTitle && (
+              <button
+                onClick={onOpenTitle}
+                title={t.titleReturnToTitle}
+                className="bg-amber-950/80 hover:bg-amber-900 active:scale-95 border border-amber-400/40 px-3 py-1.5 rounded-full shadow-lg text-amber-200 hover:text-white transition text-xs font-bold"
+              >
+                {t.titleReturnToTitle}
+              </button>
+            )}
+
             {/* Restart */}
             <button
               onClick={onRestart}
@@ -174,7 +187,6 @@ export const GameHUD: React.FC<GameHUDProps> = ({
               title={language === 'en' ? 'Upload Spritesheet / Character Skins' : 'อัปโหลดรูปภาพตัวมอด / จัดการสกิน'}
               className="bg-amber-950/80 hover:bg-amber-800/90 active:scale-95 border border-amber-500/50 px-3 py-1.5 rounded-full shadow-lg text-amber-200 hover:text-white transition text-xs font-semibold flex items-center gap-1"
             >
-              <span className="text-pink-300">🎨</span>
               <span>{t.hudSpriteBtn}</span>
             </button>
 

@@ -63,6 +63,16 @@ export interface TranslationStrings {
   knowledgeTip4: string;
   knowledgeFooter: string;
   knowledgeClose: string;
+  titleStartGame: string;
+  titleScreenTitle: string;
+  titleScreenSubtitle: string;
+  titleChangeArt: string;
+  titleResetArt: string;
+  titleSelectDiff: string;
+  titleHowToPlay: string;
+  titleHintTap: string;
+  titleHintHold: string;
+  titleReturnToTitle: string;
 }
 
 export const translations: Record<Language, TranslationStrings> = {
@@ -97,7 +107,7 @@ export const translations: Record<Language, TranslationStrings> = {
     victoryAccuracy: 'Accuracy',
     victoryAccuracySub: 'Hit Rate',
     victoryNewBest: 'NEW BEST!',
-    victoryPlayAgain: 'Play Again 🌾',
+    victoryPlayAgain: 'Play Again',
     victoryNextDiff: 'Next Challenge',
     victorySecUnit: 's',
     settingsTitle: 'Game Settings & Difficulty',
@@ -136,6 +146,16 @@ export const translations: Record<Language, TranslationStrings> = {
       'Sun aeration: Spread weevil-infested rice thinly on a cloth under sunlight; weevils flee the heat.',
     knowledgeFooter: 'Clean up the rice sack by catching every bug!',
     knowledgeClose: 'Got it!',
+    titleStartGame: 'START GAME',
+    titleScreenTitle: 'Weevil Catcher in Rice Sack',
+    titleScreenSubtitle: 'Catch weevils, ascend glowing spirits & move herbs',
+    titleChangeArt: 'Change Title Image',
+    titleResetArt: 'Reset Default Art',
+    titleSelectDiff: 'Select Weevil Count / Difficulty',
+    titleHowToPlay: 'How to Play',
+    titleHintTap: 'Tap weevils to swat and release their glowing spirits',
+    titleHintHold: 'Hold & drag chili, garlic, kaffir lime leaf to deter bugs (supports 2+ fingers)',
+    titleReturnToTitle: 'Title Screen',
   },
   th: {
     loadingTitle: 'กำลังเทข้าวสารแบบเต็มกระสอบ...',
@@ -168,7 +188,7 @@ export const translations: Record<Language, TranslationStrings> = {
     victoryAccuracy: 'ความแม่นยำ',
     victoryAccuracySub: 'แตะโดน',
     victoryNewBest: 'สถิติใหม่!',
-    victoryPlayAgain: 'เริ่มใหม่อีกครั้ง 🌾',
+    victoryPlayAgain: 'เริ่มใหม่อีกครั้ง',
     victoryNextDiff: 'ด่านท้าทายขึ้น',
     victorySecUnit: 'วิ',
     settingsTitle: 'ตั้งค่าระดับความยากและระบบเกม',
@@ -207,5 +227,15 @@ export const translations: Record<Language, TranslationStrings> = {
       'ตากแดดหรือผึ่งลม: หากมอดขึ้นแล้ว เทข้าวสารแผ่บางๆ บนกระด้งหรือผ้า มอดจะทนความร้อนไม่ไหวและหนีออกไป',
     knowledgeFooter: 'เล่นเกมจับมอดช่วยทำความสะอาดกระสอบข้าว!',
     knowledgeClose: 'เข้าใจแล้ว',
+    titleStartGame: 'เริ่มเกมส์',
+    titleScreenTitle: 'เกมจับมอดในกระสอบข้าวสาร',
+    titleScreenSubtitle: 'เกมจับมอดและส่งวิญญาณสู่สุคติ พร้อมสมุนไพรไล่มอด',
+    titleChangeArt: 'เปลี่ยนภาพ Title',
+    titleResetArt: 'คืนค่ารูปเริ่มต้น',
+    titleSelectDiff: 'เลือกระดับความยาก / จำนวนมอด',
+    titleHowToPlay: 'วิธีเล่น',
+    titleHintTap: 'แตะที่ตัวมอดเพื่อจับและส่งวิญญาณเรืองแสงสู่สุคติ',
+    titleHintHold: 'กดค้างที่พริก กระเทียม ใบมะกรูด เพื่อลากย้าย (ใช้นิ้ว 2 นิ้วขึ้นไปพร้อมกันได้)',
+    titleReturnToTitle: 'หน้าแรก (Title)',
   },
 };

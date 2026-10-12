@@ -5,6 +5,7 @@ import { VictoryModal } from './components/VictoryModal';
 import { SettingsModal } from './components/SettingsModal';
 import { RiceKnowledgeModal } from './components/RiceKnowledgeModal';
 import { SpriteModal } from './components/SpriteModal';
+import { TitleScreen } from './components/TitleScreen';
 import { GameDifficulty, DifficultyConfig } from './types/game';
 import { soundManager } from './audio/soundManager';
 import { translations, Language } from './i18n/translations';
@@ -61,7 +62,8 @@ export default function App() {
   const [isPlaying, setIsPlaying] = useState(false);
   const timerRef = useRef<number | null>(null);
 
-  // Modals
+  // Modals & Title Screen
+  const [showTitleScreen, setShowTitleScreen] = useState(true);
   const [showVictory, setShowVictory] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showKnowledge, setShowKnowledge] = useState(false);
@@ -146,8 +148,9 @@ export default function App() {
   useEffect(() => {
     const timer = setTimeout(() => {
       setIsLoading(false);
-      setIsPlaying(true);
-    }, 700);
+      // Wait for player to press Start button on Title Screen
+      setIsPlaying(false);
+    }, 600);
     return () => clearTimeout(timer);
   }, []);
 
@@ -206,11 +209,31 @@ export default function App() {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [isPlaying, showVictory, showSettings, showKnowledge, showSpriteModal, elapsedTime]);
+  }, [isPlaying, showTitleScreen, showVictory, showSettings, showKnowledge, showSpriteModal, elapsedTime]);
+
+  // Start game from Title Screen
+  const handleStartGame = useCallback(() => {
+    setShowTitleScreen(false);
+    setShowVictory(false);
+    setElapsedTime(0);
+    setIsPlaying(true);
+    setGameKey((k) => k + 1);
+  }, []);
+
+  // Return to Title Screen
+  const handleOpenTitle = useCallback(() => {
+    setShowTitleScreen(true);
+    setIsPlaying(false);
+    setShowVictory(false);
+    setShowSettings(false);
+    setShowKnowledge(false);
+    setShowSpriteModal(false);
+  }, []);
 
   // Restart game
   const handleRestart = useCallback(() => {
     const count = difficulties[difficulty].count;
+    setShowTitleScreen(false);
     setShowVictory(false);
     setRemainingCount(count);
     setTotalCount(count);
@@ -354,7 +377,7 @@ export default function App() {
         totalCount={difficulties[difficulty].count}
         ascendedText={t.canvasAscended}
         comboPrefix={t.canvasCombo}
-        isPaused={showSettings || showKnowledge || showSpriteModal}
+        isPaused={showTitleScreen || showSettings || showKnowledge || showSpriteModal}
         onCountChange={handleCountChange}
         onVictory={handleVictory}
         onHit={handleHit}
@@ -362,24 +385,32 @@ export default function App() {
       />
 
       {/* Modern HUD with floating stats & controls */}
-      <GameHUD
-        remainingCount={remainingCount}
-        totalCount={totalCount}
-        elapsedTime={elapsedTime}
-        combo={combo}
-        isMuted={isMuted}
-        language={language}
-        t={t}
-        isInterfaceHidden={isInterfaceHidden}
-        onHideInterface={handleHideInterface}
-        onUnhideInterface={handleUnhideInterface}
-        onRestart={handleRestart}
-        onToggleMute={handleToggleMute}
-        onToggleLanguage={handleToggleLanguage}
-        onOpenSettings={() => setShowSettings(true)}
-        onOpenKnowledge={() => setShowKnowledge(true)}
-        onOpenSprite={() => setShowSpriteModal(true)}
-      />
+      {!showTitleScreen && (
+        <GameHUD
+          remainingCount={remainingCount}
+          totalCount={totalCount}
+          elapsedTime={elapsedTime}
+          combo={combo}
+          isMuted={isMuted}
+          language={language}
+          t={t}
+          isInterfaceHidden={isInterfaceHidden}
+          onHideInterface={handleHideInterface}
+          onUnhideInterface={handleUnhideInterface}
+          onRestart={handleRestart}
+          onToggleMute={handleToggleMute}
+          onToggleLanguage={handleToggleLanguage}
+          onOpenSettings={() => setShowSettings(true)}
+          onOpenKnowledge={() => setShowKnowledge(true)}
+          onOpenSprite={() => setShowSpriteModal(true)}
+          onOpenTitle={handleOpenTitle}
+        />
+      )}
+
+      {/* Title Screen Overlay before entering game (Clean title with Tap to Start) */}
+      {showTitleScreen && !isLoading && (
+        <TitleScreen onStartGame={handleStartGame} />
+      )}
 
       {/* Victory Modal */}
       <VictoryModal
@@ -393,6 +424,7 @@ export default function App() {
         onPlayAgain={handleRestart}
         onNextDifficulty={handleNextDifficulty}
         hasNextDifficulty={hasNextDifficulty}
+        onOpenTitle={handleOpenTitle}
       />
 
       {/* Settings & Difficulty Modal */}
