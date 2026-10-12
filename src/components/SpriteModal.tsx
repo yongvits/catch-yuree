@@ -28,6 +28,7 @@ export const SpriteModal: React.FC<SpriteModalProps> = ({
   const [showGuide, setShowGuide] = useState(false);
   const [showHerbsGuide, setShowHerbsGuide] = useState(false);
   const [lengthScale, setLengthScale] = useState(spriteEngine.getLengthScale());
+  const [sizeScale, setSizeScale] = useState(spriteEngine.getSizeScale());
   const [previewMode, setPreviewMode] = useState<'alive' | 'ghost'>('alive');
   const previewCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -35,6 +36,7 @@ export const SpriteModal: React.FC<SpriteModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       setLengthScale(spriteEngine.getLengthScale());
+      setSizeScale(spriteEngine.getSizeScale());
       setHasCustom(spriteEngine.hasCustomSprite());
       setHasCustomHerbs(herbEngine.hasCustomSpritesheet());
       setStatusMsg(null);
@@ -104,7 +106,7 @@ export const SpriteModal: React.FC<SpriteModalProps> = ({
     } else {
       spriteEngine.drawFrame(ctx, activeFrame, centerX, centerY, 27, 0, 1.0, 1.0, false);
     }
-  }, [isOpen, activeTab, activeFrame, lengthScale, previewMode]);
+  }, [isOpen, activeTab, activeFrame, lengthScale, sizeScale, previewMode]);
 
   if (!isOpen) return null;
 
@@ -248,6 +250,7 @@ export const SpriteModal: React.FC<SpriteModalProps> = ({
     await spriteEngine.resetToDefault();
     setHasCustom(false);
     setLengthScale(1.0);
+    setSizeScale(0.80);
     setStatusMsg({
       type: 'success',
       text: isEn ? 'Reset to default character' : 'รีเซ็ตกลับเป็นตัวมอดเริ่มต้นแล้ว',
@@ -258,6 +261,12 @@ export const SpriteModal: React.FC<SpriteModalProps> = ({
   const handleLengthChange = (val: number) => {
     setLengthScale(val);
     spriteEngine.setLengthScale(val);
+    onSpriteUpdated();
+  };
+
+  const handleSizeChange = (val: number) => {
+    setSizeScale(val);
+    spriteEngine.setSizeScale(val);
     onSpriteUpdated();
   };
 
@@ -587,6 +596,49 @@ export const SpriteModal: React.FC<SpriteModalProps> = ({
                     ? 'Original Spritesheet Character Active'
                     : 'ใช้งานมอดสไปร์ทชีทต้นฉบับ'}
                 </span>
+              </div>
+
+              {/* Weevil Body Size Slider (ปรับขนาดตัวมอด) */}
+              <div className="w-full mt-3 pt-2.5 border-t border-amber-900/40">
+                <div className="flex justify-between items-center text-xs mb-1">
+                  <span className="text-amber-300 flex items-center gap-1 font-semibold">
+                    <Sliders className="w-3.5 h-3.5" />
+                    <span>{isEn ? 'Weevil Size (Overall Scale):' : 'ขนาดตัวมอด (Weevil Body Size):'}</span>
+                  </span>
+                  <span className="font-mono text-amber-400 font-bold">{Math.round(sizeScale * 100)}%</span>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-zinc-400">50%</span>
+                  <input
+                    type="range"
+                    min="0.5"
+                    max="1.5"
+                    step="0.05"
+                    value={sizeScale}
+                    onChange={(e) => handleSizeChange(parseFloat(e.target.value))}
+                    className="flex-1 accent-amber-500 cursor-pointer h-1.5 bg-zinc-800 rounded-lg"
+                  />
+                  <span className="text-[10px] text-zinc-400">150%</span>
+                </div>
+
+                <div className="flex justify-between text-[10px] text-zinc-400 mt-1">
+                  <button
+                    onClick={() => handleSizeChange(0.80)}
+                    className="hover:text-amber-300 underline cursor-pointer font-bold text-emerald-400"
+                  >
+                    {isEn ? 'Compact 80% (-20%)' : 'เล็ก 80% (ค่าแนะนำ -20%)'}
+                  </button>
+                  <button onClick={() => handleSizeChange(0.65)} className="hover:text-amber-300 underline cursor-pointer">
+                    {isEn ? 'Mini 65%' : 'จิ๋ว 65%'}
+                  </button>
+                  <button onClick={() => handleSizeChange(1.0)} className="hover:text-amber-300 underline cursor-pointer">
+                    {isEn ? 'Normal 100%' : 'ปกติ 100%'}
+                  </button>
+                  <button onClick={() => handleSizeChange(1.20)} className="hover:text-amber-300 underline cursor-pointer">
+                    {isEn ? 'Large 120%' : 'ใหญ่ 120%'}
+                  </button>
+                </div>
               </div>
 
               {/* Body Length & Proportion Slider */}

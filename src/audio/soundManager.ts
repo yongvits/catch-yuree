@@ -162,6 +162,50 @@ class SoundManager {
       // Audio fallback
     }
   }
+
+  // เสียงหยิบสมุนไพรขึ้นมาลาก (Herb pick up)
+  public playHerbPick() {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+    try {
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(320, this.ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(540, this.ctx.currentTime + 0.1);
+      gain.gain.setValueAtTime(0.14, this.ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.12);
+      osc.start();
+      osc.stop(this.ctx.currentTime + 0.13);
+    } catch {
+      // Audio fallback
+    }
+  }
+
+  // เสียงวางสมุนไพรลงบนข้าว (Herb drop)
+  public playHerbDrop() {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+    try {
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(420, this.ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(180, this.ctx.currentTime + 0.12);
+      gain.gain.setValueAtTime(0.12, this.ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.14);
+      osc.start();
+      osc.stop(this.ctx.currentTime + 0.15);
+    } catch {
+      // Audio fallback
+    }
+  }
 }
 
 export const soundManager = new SoundManager();

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useRef } from 'react';
 import { TranslationStrings, Language } from '../i18n/translations';
 
 interface GameHUDProps {
@@ -38,6 +38,36 @@ export const GameHUD: React.FC<GameHUDProps> = ({
   onOpenKnowledge,
   onOpenSprite,
 }) => {
+  const [clickCount, setClickCount] = useState(0);
+  const clickCountRef = useRef(0);
+  const clickTimerRef = useRef<number | null>(null);
+
+  const handleScoreClick = () => {
+    clickCountRef.current += 1;
+    setClickCount(clickCountRef.current);
+
+    if (clickTimerRef.current) {
+      window.clearTimeout(clickTimerRef.current);
+    }
+
+    if (clickCountRef.current >= 4) {
+      clickCountRef.current = 0;
+      setClickCount(0);
+      if (isInterfaceHidden) {
+        onUnhideInterface();
+      } else {
+        onHideInterface();
+      }
+      return;
+    }
+
+    // Reset click count after 1.8 seconds of inactivity
+    clickTimerRef.current = window.setTimeout(() => {
+      clickCountRef.current = 0;
+      setClickCount(0);
+    }, 1800);
+  };
+
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
@@ -51,12 +81,16 @@ export const GameHUD: React.FC<GameHUDProps> = ({
     <>
       {/* Top Left Floating Bar */}
       <div className="absolute top-3 left-3 md:top-4 md:left-4 z-20 flex flex-wrap items-center gap-2 pointer-events-none">
-        {/* Weevil Remaining Counter (Clean - No icon) */}
+        {/* Weevil Remaining Counter (Clean - No icon, click 4 times to restore/toggle menu) */}
         <div
-          onClick={isInterfaceHidden ? onUnhideInterface : undefined}
+          onClick={handleScoreClick}
           title={isInterfaceHidden ? t.hudHiddenNotice : undefined}
-          className={`bg-black/75 backdrop-blur-md border border-amber-500/20 px-3.5 py-1.5 rounded-full shadow-lg flex items-center gap-2 pointer-events-auto text-xs md:text-sm transition ${
-            isInterfaceHidden ? 'cursor-pointer hover:border-amber-400/50' : ''
+          className={`bg-black/75 backdrop-blur-md border px-3.5 py-1.5 rounded-full shadow-lg flex items-center gap-2 pointer-events-auto text-xs md:text-sm transition cursor-pointer select-none active:scale-95 ${
+            clickCount > 0
+              ? 'border-amber-400 bg-amber-950/80 shadow-amber-500/25 ring-1 ring-amber-400/50'
+              : isInterfaceHidden
+              ? 'border-amber-500/30 hover:border-amber-400/60'
+              : 'border-amber-500/20 hover:border-amber-400/40'
           }`}
         >
           <span className="font-bold text-amber-300">{t.hudRemaining}</span>
@@ -71,15 +105,16 @@ export const GameHUD: React.FC<GameHUDProps> = ({
               style={{ width: `${progressPercent}%` }}
             />
           </div>
+          {clickCount > 0 && (
+            <span className="ml-1 text-[10px] font-black bg-amber-400 text-black px-1.5 py-0.5 rounded-full animate-pulse shadow-sm">
+              {clickCount}/4
+            </span>
+          )}
         </div>
 
-        {/* Stopwatch (Clean - No icon) */}
+        {/* Stopwatch (Clean - Display only, tapping does NOT restore menu) */}
         <div
-          onClick={isInterfaceHidden ? onUnhideInterface : undefined}
-          title={isInterfaceHidden ? t.hudHiddenNotice : undefined}
-          className={`bg-black/75 backdrop-blur-md border border-white/10 px-3 py-1.5 rounded-full shadow-lg flex items-center gap-1.5 pointer-events-auto text-xs md:text-sm font-mono text-amber-200 transition ${
-            isInterfaceHidden ? 'cursor-pointer hover:border-amber-400/50' : ''
-          }`}
+          className="bg-black/75 backdrop-blur-md border border-white/10 px-3 py-1.5 rounded-full shadow-lg flex items-center gap-1.5 pointer-events-auto text-xs md:text-sm font-mono text-amber-200 select-none"
         >
           <span className="text-zinc-400 font-sans text-xs">{t.hudTimeLabel}:</span>
           <span className="font-semibold">{formatTime(elapsedTime)}</span>

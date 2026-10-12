@@ -48,7 +48,20 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
     isVictoryTriggered: false,
     ghostIdCounter: 0,
     animationFrameId: 0,
+    lastActivityTime: performance.now(),
   });
+
+  // Reference for dragging chili, garlic, and kaffir lime leaf with long press
+  const herbHoldRef = useRef<{
+    herbId: number;
+    pointerId: number | 'mouse';
+    startX: number;
+    startY: number;
+    offsetX: number;
+    offsetY: number;
+    timer: number | null;
+    isDragging: boolean;
+  } | null>(null);
 
   // Setup offscreen canvas
   const initOffscreenCanvas = useCallback(() => {
@@ -226,13 +239,6 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
       const targetCtx = g.isForeground ? fgCtx : bgCtx;
       drawRiceGrain(targetCtx, g);
     });
-
-    // Draw background herbs (nestled underneath foreground rice grains)
-    stateRef.current.herbs
-      .filter((h) => !h.isForeground)
-      .forEach((h) => {
-        herbEngine.drawHerb(bgCtx, h.frameIndex, h.x, h.y, 34 * h.scale, h.rotation);
-      });
   }, [initOffscreenCanvas]);
 
   // 4. Spawn weevils with non-overlapping initial distribution
@@ -274,12 +280,13 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
         }
       }
 
+      const shouldStartIdle = Math.random() < 0.35;
       newWeevils.push({
         id: i + 1,
         x: spawnX,
         y: spawnY,
-        vx: (Math.random() - 0.5) * 1.2,
-        vy: (Math.random() - 0.5) * 1.2,
+        vx: shouldStartIdle ? 0 : (Math.random() - 0.5) * 0.7,
+        vy: shouldStartIdle ? 0 : (Math.random() - 0.5) * 0.7,
         baseSpeed: 0.35 + Math.random() * 0.55,
         scurryTimer: 0,
         size: 13 + Math.random() * 4,
@@ -289,6 +296,7 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
         isDying: false,
         scale: 1,
         changeDirTimer: Math.random() * 100,
+        idlePauseTimer: shouldStartIdle ? Math.floor(60 + Math.random() * 180) : 0,
       });
     }
 
@@ -303,6 +311,7 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
     stateRef.current.totalTaps = 0;
     stateRef.current.successfulHits = 0;
     stateRef.current.startTime = performance.now();
+    stateRef.current.lastActivityTime = performance.now();
     stateRef.current.isVictoryTriggered = false;
 
     onCountChange(count, count);
@@ -340,16 +349,19 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
     ctx.translate(g.x, g.y);
     ctx.rotate(g.rotation);
     ctx.scale(g.scale, g.scale);
-    ctx.globalAlpha = Math.max(0, Math.min(1, g.opacity * 0.8)); // Reduced opacity for ethereal translucency
+    // Smooth ease-out fade curve for peaceful, gradual disappearance without abrupt vanishing
+    const currentAlpha = Math.max(0, Math.min(1, g.opacity));
+    const smoothAlpha = Math.sin((currentAlpha * Math.PI) / 2);
+    ctx.globalAlpha = smoothAlpha;
 
-    const size = g.size;
+    const size = g.size * spriteEngine.getSizeScale();
 
     // --- 1. ENHANCED LUMINOUS GLOW EFFECT (เพิ่มการเรืองแสง) ---
     // Outer wide ethereal blue spirit glow aura
     ctx.save();
     ctx.shadowColor = '#0284c7';
-    ctx.shadowBlur = 45;
-    ctx.fillStyle = 'rgba(56, 189, 248, 0.32)';
+    ctx.shadowBlur = Math.round(45 * smoothAlpha);
+    ctx.fillStyle = `rgba(56, 189, 248, ${0.32 * smoothAlpha})`;
     ctx.beginPath();
     ctx.ellipse(0, 0, size * 1.55, size * 1.85, 0, 0, Math.PI * 2);
     ctx.fill();
@@ -358,10 +370,10 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
     // Radiant cyan/blue luminous core glow
     ctx.save();
     ctx.shadowColor = '#38bdf8';
-    ctx.shadowBlur = 32;
+    ctx.shadowBlur = Math.round(32 * smoothAlpha);
     const coreGrad = ctx.createRadialGradient(0, 0, size * 0.15, 0, 0, size * 1.25);
-    coreGrad.addColorStop(0, 'rgba(224, 242, 254, 0.65)'); // Luminous crystal bright center
-    coreGrad.addColorStop(0.55, 'rgba(56, 189, 248, 0.45)');
+    coreGrad.addColorStop(0, `rgba(224, 242, 254, ${0.68 * smoothAlpha})`); // Luminous crystal bright center
+    coreGrad.addColorStop(0.55, `rgba(56, 189, 248, ${0.45 * smoothAlpha})`);
     coreGrad.addColorStop(1, 'rgba(14, 165, 233, 0)');
     ctx.fillStyle = coreGrad;
     ctx.beginPath();
@@ -369,44 +381,80 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
     ctx.fill();
     ctx.restore();
 
-    // 2. Translucent Angelic Fairy Wings with soft blue glow
-    const wingWiggle = Math.sin(g.wingPhase) * 0.35;
-    const wingSpan = size * 1.25;
+    // --- 2. TRANSLUCENT ANGELIC FAIRY WINGS (สลับปีกกลับด้านมาทางหัว และให้อยู่กลางตัว) ---
+    // Wings attached at exact body center (y = 0) and oriented towards the head
+    const wingWiggle = Math.sin(g.wingPhase) * 0.28;
+    const wingSpan = size * 1.35;
 
-    // Left Wing
+    // Left Wing (Attached on left center body, spreading gracefully outwards toward head)
     ctx.save();
-    ctx.translate(-size * 0.55, -size * 0.15);
-    ctx.rotate(-0.45 + wingWiggle);
-    ctx.fillStyle = 'rgba(56, 189, 248, 0.45)';
-    ctx.strokeStyle = '#bae6fd';
+    ctx.translate(-size * 0.32, 0); // อยู่กลางตัว
+    ctx.rotate(-(Math.PI - 0.52) + wingWiggle); // สลับด้านมาทางหัว
+    ctx.fillStyle = `rgba(56, 189, 248, ${0.52 * smoothAlpha})`;
+    ctx.strokeStyle = `rgba(186, 230, 253, ${0.90 * smoothAlpha})`;
     ctx.lineWidth = size * 0.08;
     ctx.shadowColor = '#38bdf8';
-    ctx.shadowBlur = 20;
+    ctx.shadowBlur = Math.round(22 * smoothAlpha);
+
+    // Primary wing blade
     ctx.beginPath();
-    ctx.ellipse(0, 0, wingSpan * 0.85, wingSpan * 0.38, -0.25, 0, Math.PI * 2);
+    ctx.ellipse(wingSpan * 0.48, 0, wingSpan * 0.52, wingSpan * 0.28, -0.15, 0, Math.PI * 2);
     ctx.fill();
+    ctx.stroke();
+
+    // Secondary fairy winglet lobe
+    ctx.fillStyle = `rgba(125, 211, 252, ${0.38 * smoothAlpha})`;
+    ctx.beginPath();
+    ctx.ellipse(wingSpan * 0.36, wingSpan * 0.14, wingSpan * 0.34, wingSpan * 0.18, 0.2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    // Inner glowing wing vein
+    ctx.strokeStyle = `rgba(240, 249, 255, ${0.80 * smoothAlpha})`;
+    ctx.lineWidth = size * 0.035;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.quadraticCurveTo(wingSpan * 0.3, -wingSpan * 0.05, wingSpan * 0.85, 0);
     ctx.stroke();
     ctx.restore();
 
-    // Right Wing
+    // Right Wing (Attached on right center body, spreading gracefully outwards toward head)
     ctx.save();
-    ctx.translate(size * 0.55, -size * 0.15);
-    ctx.rotate(0.45 - wingWiggle);
-    ctx.fillStyle = 'rgba(56, 189, 248, 0.45)';
-    ctx.strokeStyle = '#bae6fd';
+    ctx.translate(size * 0.32, 0); // อยู่กลางตัว
+    ctx.rotate(-0.52 - wingWiggle); // สลับด้านมาทางหัว
+    ctx.fillStyle = `rgba(56, 189, 248, ${0.52 * smoothAlpha})`;
+    ctx.strokeStyle = `rgba(186, 230, 253, ${0.90 * smoothAlpha})`;
     ctx.lineWidth = size * 0.08;
     ctx.shadowColor = '#38bdf8';
-    ctx.shadowBlur = 20;
+    ctx.shadowBlur = Math.round(22 * smoothAlpha);
+
+    // Primary wing blade
     ctx.beginPath();
-    ctx.ellipse(0, 0, wingSpan * 0.85, wingSpan * 0.38, 0.25, 0, Math.PI * 2);
+    ctx.ellipse(wingSpan * 0.48, 0, wingSpan * 0.52, wingSpan * 0.28, 0.15, 0, Math.PI * 2);
     ctx.fill();
+    ctx.stroke();
+
+    // Secondary fairy winglet lobe
+    ctx.fillStyle = `rgba(125, 211, 252, ${0.38 * smoothAlpha})`;
+    ctx.beginPath();
+    ctx.ellipse(wingSpan * 0.36, -wingSpan * 0.14, wingSpan * 0.34, wingSpan * 0.18, -0.2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    // Inner glowing wing vein
+    ctx.strokeStyle = `rgba(240, 249, 255, ${0.80 * smoothAlpha})`;
+    ctx.lineWidth = size * 0.035;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.quadraticCurveTo(wingSpan * 0.3, wingSpan * 0.05, wingSpan * 0.85, 0);
     ctx.stroke();
     ctx.restore();
 
-    // 3. THE SPIRIT SPRITE WITH TRANSLUCENT OPACITY & RADIANT GLOW
+    // --- 3. THE SPIRIT SPRITE WITH TRANSLUCENT OPACITY & RADIANT GLOW ---
+    // Opacity fades synchronously with smoothAlpha to prevent sudden disappearance
     ctx.save();
     ctx.shadowColor = '#38bdf8';
-    ctx.shadowBlur = 36;
+    ctx.shadowBlur = Math.round(36 * smoothAlpha);
     spriteEngine.drawFrame(
       ctx,
       g.frameIndex ?? 0,
@@ -414,13 +462,11 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
       0,
       size,
       0, // Already transformed by parent
-      0.72, // Reduced opacity for ethereal spirit translucency
+      smoothAlpha * 0.72, // Fades smoothly from 0.72 down to 0.0!
       1.0,
       true // isGhost = true
     );
     ctx.restore();
-
-    // Halo ring removed per user request: "ตอนตายเอาวงแหวนที่หัวออก ปรับให้เป็นโทนออกฟ้า"
 
     ctx.restore();
   };
@@ -452,6 +498,71 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
     }
   };
 
+  // 7.5 Create fragrant aromatic sparks for herbs (chili, lime, garlic)
+  const createHerbSparks = (x: number, y: number, category: 'chili' | 'lime' | 'garlic', count = 8) => {
+    const sparkColor =
+      category === 'chili'
+        ? '#ef4444' // Ruby chili spark
+        : category === 'lime'
+        ? '#84cc16' // Lime green zest
+        : '#fef08a'; // Garlic ivory essence
+    for (let p = 0; p < count; p++) {
+      stateRef.current.particles.push({
+        x: x + (Math.random() - 0.5) * 14,
+        y: y + (Math.random() - 0.5) * 14,
+        vx: (Math.random() - 0.5) * 3.5,
+        vy: (Math.random() - 0.5) * 3.5 - 1.2,
+        size: 1.6 + Math.random() * 2.8,
+        color: sparkColor,
+        life: 0.85,
+        decay: 0.045 + Math.random() * 0.03,
+      });
+    }
+  };
+
+  // 7.8 Draw lifted/dragged herb item with elevated shadow and repellent aura ring
+  const drawDraggedHerb = (ctx: CanvasRenderingContext2D, h: HerbItem) => {
+    ctx.save();
+
+    // 1. Elevated 3D cast drop shadow
+    ctx.save();
+    ctx.shadowColor = 'rgba(28, 14, 5, 0.45)';
+    ctx.shadowBlur = 18;
+    ctx.shadowOffsetX = 8;
+    ctx.shadowOffsetY = 16;
+    herbEngine.drawHerb(ctx, h.frameIndex, h.x, h.y, 35 * h.scale * 1.25, h.rotation);
+    ctx.restore();
+
+    // 2. Aromatic repellent perimeter ring
+    const repelRadius = 82 * h.scale;
+    const auraColor =
+      h.category === 'chili'
+        ? 'rgba(239, 68, 68, 0.5)'
+        : h.category === 'lime'
+        ? 'rgba(132, 204, 22, 0.5)'
+        : 'rgba(254, 240, 138, 0.5)';
+    ctx.save();
+    ctx.strokeStyle = auraColor;
+    ctx.lineWidth = 1.8;
+    ctx.setLineDash([5, 5]);
+    ctx.beginPath();
+    ctx.arc(h.x, h.y, repelRadius, 0, Math.PI * 2);
+    ctx.stroke();
+
+    const glowGrad = ctx.createRadialGradient(h.x, h.y, 10, h.x, h.y, repelRadius);
+    glowGrad.addColorStop(0, auraColor.replace('0.5', '0.22'));
+    glowGrad.addColorStop(1, auraColor.replace('0.5', '0'));
+    ctx.fillStyle = glowGrad;
+    ctx.beginPath();
+    ctx.arc(h.x, h.y, repelRadius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    // 3. Main slightly magnified herb item
+    herbEngine.drawHerb(ctx, h.frameIndex, h.x, h.y, 35 * h.scale * 1.25, h.rotation);
+    ctx.restore();
+  };
+
   // 8. Add floating text on hit/combo
   const addFloatingText = (x: number, y: number, text: string, color = '#fef08a') => {
     stateRef.current.floatingTexts.push({
@@ -477,6 +588,7 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
       const tapY = (clientY - rect.top) * (canvas.height / rect.height);
 
       stateRef.current.totalTaps++;
+      stateRef.current.lastActivityTime = performance.now();
 
       let hitDetected = false;
       const weevils = stateRef.current.weevils;
@@ -487,7 +599,7 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
         if (w.isDying) continue;
 
         const dist = Math.hypot(w.x - tapX, w.y - tapY);
-        const hitRadius = w.size * 2.3;
+        const hitRadius = Math.max(22, w.size * spriteEngine.getSizeScale() * 2.3);
 
         if (dist < hitRadius) {
           w.isDying = true;
@@ -520,19 +632,19 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
             addFloatingText(w.x, w.y, ascendedText, '#38bdf8');
           }
 
-          // Released ghost (Slower, majestic floating, stays longer in air, peaceful fade)
+          // Released ghost (Expands 1x larger [2.0x scale] before disappearing, duration +50%)
           stateRef.current.ghostIdCounter++;
           stateRef.current.ghosts.push({
             id: stateRef.current.ghostIdCounter,
             x: w.x,
             y: w.y,
             frameIndex: Math.floor(w.legsPhase) % 8,
-            floatSpeed: 0.65 + Math.random() * 0.35,
-            zoomSpeed: 0.0035 + Math.random() * 0.002,
+            floatSpeed: 0, // ไม่ลอยขึ้น! (stationary Y, ไม่ลอยขึ้นบนจอ)
+            zoomSpeed: 0.011,
             scale: 1.0,
             rotation: w.rotation,
-            opacity: 0.88,
-            fadeSpeed: 0.0035 + Math.random() * 0.0012,
+            opacity: 1.0,
+            fadeSpeed: 0.011, // เพิ่มเวลาขึ้นครึ่งหนึ่ง (+50% duration: ~1.5 - 1.6 วินาที)
             wavePhase: Math.random() * Math.PI,
             wingPhase: Math.random() * 10,
             size: w.size,
@@ -573,6 +685,7 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
         weevils.forEach((w) => {
           const dist = Math.hypot(w.x - tapX, w.y - tapY);
           if (dist < 110 && !w.isDying) {
+            w.idlePauseTimer = 0; // Wake up immediately!
             const angle = Math.atan2(w.y - tapY, w.x - tapX) + (Math.random() - 0.5) * 0.7;
             w.scurryTimer = 160;
             w.vx = Math.cos(angle) * w.baseSpeed * 3.2;
@@ -586,28 +699,11 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
       stateRef.current.herbs.forEach((h) => {
         const dist = Math.hypot(h.x - tapX, h.y - tapY);
         if (dist < 42 * h.scale) {
-          const sparkColor =
-            h.category === 'chili'
-              ? '#ef4444' // Ruby chili spark
-              : h.category === 'lime'
-              ? '#84cc16' // Lime green zest
-              : '#fef08a'; // Garlic ivory essence
-          for (let p = 0; p < 8; p++) {
-            stateRef.current.particles.push({
-              x: h.x,
-              y: h.y,
-              vx: (Math.random() - 0.5) * 4.5,
-              vy: (Math.random() - 0.5) * 4.5 - 1.5,
-              size: 2.0 + Math.random() * 2.5,
-              color: sparkColor,
-              life: 1.0,
-              decay: 0.04 + Math.random() * 0.03,
-            });
-          }
+          createHerbSparks(h.x, h.y, h.category, 6);
         }
       });
     },
-    [onCountChange, onVictory, onHit, onMiss]
+    [onCountChange, onVictory, onHit, onMiss, ascendedText, comboPrefix]
   );
 
   // Resize canvas and update positions proportionally
@@ -639,6 +735,130 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
       });
     }
   }, [generateRiceGrains, generateHerbs, renderOffscreenRice]);
+
+  // Convert client coordinates to canvas coordinates
+  const getCanvasCoords = useCallback((clientX: number, clientY: number) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return { x: 0, y: 0 };
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: (clientX - rect.left) * (canvas.width / rect.width),
+      y: (clientY - rect.top) * (canvas.height / rect.height),
+    };
+  }, []);
+
+  // Check if pointer pressed on an herb to start long-press hold
+  const checkHerbStart = useCallback(
+    (canvasX: number, canvasY: number, pointerId: number | 'mouse') => {
+      const herbs = stateRef.current.herbs;
+      let closestHerb: HerbItem | null = null;
+      let minDist = Infinity;
+
+      for (let i = herbs.length - 1; i >= 0; i--) {
+        const h = herbs[i];
+        const dist = Math.hypot(h.x - canvasX, h.y - canvasY);
+        const grabRadius = 46 * h.scale;
+        if (dist < grabRadius && dist < minDist) {
+          minDist = dist;
+          closestHerb = h;
+        }
+      }
+
+      if (closestHerb) {
+        const targetId = closestHerb.id;
+        const offsetX = canvasX - closestHerb.x;
+        const offsetY = canvasY - closestHerb.y;
+
+        const timer = window.setTimeout(() => {
+          if (herbHoldRef.current && herbHoldRef.current.herbId === targetId) {
+            herbHoldRef.current.isDragging = true;
+            const target = stateRef.current.herbs.find((h) => h.id === targetId);
+            if (target) {
+              target.isDragging = true;
+              soundManager.playHerbPick();
+              if (typeof navigator !== 'undefined' && navigator.vibrate) {
+                try {
+                  navigator.vibrate(35);
+                } catch {
+                  // ignore
+                }
+              }
+              createHerbSparks(target.x, target.y, target.category, 12);
+            }
+          }
+        }, 250); // 250ms long press
+
+        herbHoldRef.current = {
+          herbId: targetId,
+          pointerId,
+          startX: canvasX,
+          startY: canvasY,
+          offsetX,
+          offsetY,
+          timer,
+          isDragging: false,
+        };
+      }
+    },
+    []
+  );
+
+  // Dragging herb
+  const handleHerbMove = useCallback((canvasX: number, canvasY: number) => {
+    const hold = herbHoldRef.current;
+    if (!hold) return;
+
+    if (!hold.isDragging) {
+      if (Math.hypot(canvasX - hold.startX, canvasY - hold.startY) > 16) {
+        if (hold.timer) clearTimeout(hold.timer);
+        herbHoldRef.current = null;
+      }
+      return;
+    }
+
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const herb = stateRef.current.herbs.find((h) => h.id === hold.herbId);
+    if (herb) {
+      const pad = 35;
+      herb.x = Math.max(pad, Math.min(canvas.width - pad, canvasX - hold.offsetX));
+      herb.y = Math.max(pad, Math.min(canvas.height - pad, canvasY - hold.offsetY));
+      stateRef.current.lastActivityTime = performance.now();
+
+      if (Math.random() < 0.22) {
+        createHerbSparks(herb.x, herb.y, herb.category, 1);
+      }
+    }
+  }, []);
+
+  // Dropping herb
+  const handleHerbEnd = useCallback(() => {
+    const hold = herbHoldRef.current;
+    if (!hold) return;
+
+    if (hold.timer) {
+      clearTimeout(hold.timer);
+    }
+
+    if (hold.isDragging) {
+      const herb = stateRef.current.herbs.find((h) => h.id === hold.herbId);
+      if (herb) {
+        herb.isDragging = false;
+        soundManager.playHerbDrop();
+        if (typeof navigator !== 'undefined' && navigator.vibrate) {
+          try {
+            navigator.vibrate(20);
+          } catch {
+            // ignore
+          }
+        }
+        createHerbSparks(herb.x, herb.y, herb.category, 8);
+      }
+    }
+
+    herbHoldRef.current = null;
+  }, []);
 
   // Main game update & loop
   useEffect(() => {
@@ -694,6 +914,9 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
             }
           }
 
+          // Screen idle check: if user hasn't interacted for >1.4s, weevils walk slowly or rest in place
+          const isScreenIdle = performance.now() - stateRef.current.lastActivityTime > 1400;
+
           // --- 2. Update Weevils ---
           for (let i = weevils.length - 1; i >= 0; i--) {
             const w = weevils[i];
@@ -706,13 +929,36 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
               continue;
             }
 
-            w.changeDirTimer--;
-            if (w.changeDirTimer <= 0) {
-              const angle = Math.random() * Math.PI * 2;
-              const speed = w.scurryTimer > 0 ? w.baseSpeed * 2.8 : w.baseSpeed;
-              w.vx = Math.cos(angle) * speed;
-              w.vy = Math.sin(angle) * speed;
-              w.changeDirTimer = 60 + Math.random() * 90;
+            // Check if weevil is resting / idling quietly in place
+            if ((w.idlePauseTimer ?? 0) > 0) {
+              w.idlePauseTimer!--;
+              w.vx = 0;
+              w.vy = 0;
+              // Very gentle resting idle animation (subtle breathing / antennae wiggle)
+              w.legsPhase += 0.02;
+            } else {
+              w.changeDirTimer--;
+              if (w.changeDirTimer <= 0) {
+                const angle = Math.random() * Math.PI * 2;
+                if (isScreenIdle && Math.random() < 0.40) {
+                  // Undisturbed weevil rests and stays still in place among rice grains
+                  w.idlePauseTimer = Math.floor(90 + Math.random() * 210); // 1.5 - 5 seconds
+                  w.vx = 0;
+                  w.vy = 0;
+                  w.changeDirTimer = w.idlePauseTimer + 40;
+                } else {
+                  // Walking: if screen is idle, walk slowly; if player is active, normal speed
+                  const speed =
+                    w.scurryTimer > 0
+                      ? w.baseSpeed * 2.8
+                      : isScreenIdle
+                      ? w.baseSpeed * (0.32 + Math.random() * 0.20) // เดินช้า ๆ เมื่อไม่ได้แตะจอ
+                      : w.baseSpeed;
+                  w.vx = Math.cos(angle) * speed;
+                  w.vy = Math.sin(angle) * speed;
+                  w.changeDirTimer = isScreenIdle ? 100 + Math.random() * 120 : 60 + Math.random() * 90;
+                }
+              }
             }
 
             if (w.scurryTimer > 0) {
@@ -728,17 +974,30 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
             w.x += w.vx;
             w.y += w.vy;
 
-            // Natural herbal repellent behavior: weevils naturally steer away from pungent chili, garlic, and lime
+            // Natural herbal repellent behavior: weevils strongly dislike pungent chili, garlic, and lime
+            // If weevil gets close, it flees immediately at full sprint speed ("วิ่งไปเลย"!)
             for (let hi = 0; hi < stateRef.current.herbs.length; hi++) {
               const herb = stateRef.current.herbs[hi];
               const hdx = w.x - herb.x;
               const hdy = w.y - herb.y;
               const hDist = Math.hypot(hdx, hdy);
-              const repelRadius = 38 * herb.scale;
+              const repelRadius = 82 * herb.scale; // Expanded aromatic deterrence radius (~75-95px)
+
               if (hDist < repelRadius && hDist > 0) {
-                const repelForce = ((repelRadius - hDist) / repelRadius) * 0.14;
-                w.vx += (hdx / hDist) * repelForce;
-                w.vy += (hdy / hDist) * repelForce;
+                // Panicked sprint mode: wake up from idle pause immediately and scamper rapidly away
+                w.idlePauseTimer = 0;
+                w.scurryTimer = Math.max(w.scurryTimer, 75);
+                const angle = Math.atan2(hdy, hdx) + (Math.random() - 0.5) * 0.35;
+                const urgency = 1 - hDist / repelRadius;
+                const fleeSpeed = w.baseSpeed * (3.2 + urgency * 2.2); // Noticeably rapid sprint
+                w.vx = Math.cos(angle) * fleeSpeed;
+                w.vy = Math.sin(angle) * fleeSpeed;
+                w.changeDirTimer = 55 + Math.random() * 45;
+
+                // Subtle aromatic repellent spark if very close
+                if (hDist < 38 * herb.scale && Math.random() < 0.1) {
+                  createHerbSparks(herb.x, herb.y, herb.category, 1);
+                }
               }
             }
 
@@ -765,15 +1024,29 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
             }
           }
 
-          // --- 3. Update Ghosts (Serene, gentle floating and slow fade) ---
+          // --- 3. Update Ghosts (Expands until 1x larger [2.0x scale] before disappearing, duration +50%) ---
           for (let i = ghosts.length - 1; i >= 0; i--) {
             const g = ghosts[i];
-            g.y -= g.floatSpeed;
-            g.scale += g.zoomSpeed;
+            // Stationary Y position (ไม่ลอยขึ้นนะ)
             g.opacity -= g.fadeSpeed;
-            g.wavePhase += 0.022;
-            g.x += Math.sin(g.wavePhase) * 0.65;
-            g.wingPhase += 0.16;
+            // ขยายใหญ่กว่าเดิม 1 เท่า (scale จาก 1.0 ถึง 2.0x) ก่อนจะหายไป
+            const progress = Math.max(0, Math.min(1, 1 - g.opacity));
+            g.scale = 1.0 + progress * 1.0;
+            g.wingPhase += 0.18;
+
+            // Soft glowing trail dust as the soul peacefully dissolves
+            if (Math.random() < 0.22 && g.opacity > 0.12 && g.opacity < 0.9) {
+              particles.push({
+                x: g.x + (Math.random() - 0.5) * g.size * g.scale * 0.7,
+                y: g.y + (Math.random() - 0.5) * g.size * g.scale * 0.7,
+                vx: (Math.random() - 0.5) * 0.7,
+                vy: (Math.random() - 0.5) * 0.7,
+                size: 1.2 + Math.random() * 2.5,
+                color: Math.random() > 0.4 ? '#38bdf8' : '#bae6fd',
+                life: 0.7,
+                decay: 0.032,
+              });
+            }
 
             if (g.opacity <= 0) {
               ghosts.splice(i, 1);
@@ -813,6 +1086,13 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
           ctx.drawImage(bgCanvas, 0, 0);
         }
 
+        // 1.5 Background herbs (nestled under foreground rice grains)
+        stateRef.current.herbs
+          .filter((h) => !h.isForeground && !h.isDragging)
+          .forEach((h) => {
+            herbEngine.drawHerb(ctx, h.frameIndex, h.x, h.y, 34 * h.scale, h.rotation);
+          });
+
         // 2. Alive Weevils
         weevils.forEach((w) => drawWeevil(ctx, w));
 
@@ -823,10 +1103,16 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
 
         // 3.5 Foreground herbs (resting on top of rice grains for high visual clarity!)
         stateRef.current.herbs
-          .filter((h) => h.isForeground)
+          .filter((h) => h.isForeground && !h.isDragging)
           .forEach((h) => {
             herbEngine.drawHerb(ctx, h.frameIndex, h.x, h.y, 35 * h.scale, h.rotation);
           });
+
+        // 3.8 Dragged herb (lifted above everything with elevated shadow & repellent aura)
+        const draggedHerb = stateRef.current.herbs.find((h) => h.isDragging);
+        if (draggedHerb) {
+          drawDraggedHerb(ctx, draggedHerb);
+        }
 
         // 4. Bran burst particles
         particles.forEach((p) => {
@@ -861,30 +1147,103 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
     animationId = requestAnimationFrame(loop);
     stateRef.current.animationFrameId = animationId;
 
+    const handleGlobalMouseMove = (e: MouseEvent) => {
+      if (herbHoldRef.current && herbHoldRef.current.pointerId === 'mouse') {
+        const coords = getCanvasCoords(e.clientX, e.clientY);
+        handleHerbMove(coords.x, coords.y);
+      }
+    };
+
+    const handleGlobalMouseUp = () => {
+      if (herbHoldRef.current && herbHoldRef.current.pointerId === 'mouse') {
+        handleHerbEnd();
+      }
+    };
+
     const handleWindowResize = () => {
       resizeGame();
     };
 
     window.addEventListener('resize', handleWindowResize);
+    window.addEventListener('mousemove', handleGlobalMouseMove);
+    window.addEventListener('mouseup', handleGlobalMouseUp);
 
     return () => {
       cancelAnimationFrame(animationId);
       window.removeEventListener('resize', handleWindowResize);
+      window.removeEventListener('mousemove', handleGlobalMouseMove);
+      window.removeEventListener('mouseup', handleGlobalMouseUp);
+      if (herbHoldRef.current?.timer) {
+        clearTimeout(herbHoldRef.current.timer);
+        herbHoldRef.current = null;
+      }
     };
-  }, [totalCount, isPaused, resizeGame, spawnWeevils]);
+  }, [totalCount, isPaused, resizeGame, spawnWeevils, getCanvasCoords, handleHerbMove, handleHerbEnd]);
 
   return (
     <canvas
       ref={canvasRef}
       className="absolute inset-0 w-full h-full block cursor-crosshair touch-none select-none z-0"
-      onMouseDown={(e) => handleInput(e.clientX, e.clientY)}
-      onTouchStart={(e) => {
-        if (e.touches && e.touches.length >= 4) {
-          // Reserved for 4-finger interface restore gesture
-          return;
+      onMouseDown={(e) => {
+        const coords = getCanvasCoords(e.clientX, e.clientY);
+        if (!herbHoldRef.current) {
+          checkHerbStart(coords.x, coords.y, 'mouse');
         }
-        if (e.touches && e.touches.length > 0) {
-          handleInput(e.touches[0].clientX, e.touches[0].clientY);
+        handleInput(e.clientX, e.clientY);
+      }}
+      onMouseMove={(e) => {
+        if (herbHoldRef.current && herbHoldRef.current.pointerId === 'mouse') {
+          const coords = getCanvasCoords(e.clientX, e.clientY);
+          handleHerbMove(coords.x, coords.y);
+        }
+      }}
+      onMouseUp={() => {
+        if (herbHoldRef.current && herbHoldRef.current.pointerId === 'mouse') {
+          handleHerbEnd();
+        }
+      }}
+      onTouchStart={(e) => {
+        // Multi-touch squashing: handle up to 4 simultaneous touch points
+        const touches = e.changedTouches;
+        const count = Math.min(touches.length, 4);
+        for (let i = 0; i < count; i++) {
+          const t = touches[i];
+          const coords = getCanvasCoords(t.clientX, t.clientY);
+          if (!herbHoldRef.current) {
+            checkHerbStart(coords.x, coords.y, t.identifier);
+          }
+          handleInput(t.clientX, t.clientY);
+        }
+      }}
+      onTouchMove={(e) => {
+        if (!herbHoldRef.current) return;
+        for (let i = 0; i < e.changedTouches.length; i++) {
+          const t = e.changedTouches[i];
+          if (t.identifier === herbHoldRef.current.pointerId) {
+            const coords = getCanvasCoords(t.clientX, t.clientY);
+            handleHerbMove(coords.x, coords.y);
+            break;
+          }
+        }
+      }}
+      onTouchEnd={(e) => {
+        if (!herbHoldRef.current) return;
+        for (let i = 0; i < e.changedTouches.length; i++) {
+          const t = e.changedTouches[i];
+          if (t.identifier === herbHoldRef.current.pointerId) {
+            handleHerbEnd();
+            break;
+          }
+        }
+      }}
+      onTouchCancel={(e) => {
+        if (!herbHoldRef.current) return;
+        for (let i = 0; i < e.changedTouches.length; i++) {
+          const t = e.changedTouches[i];
+          if (t.identifier === herbHoldRef.current.pointerId) {
+            handleHerbEnd();
+            break;
+          }
         }
       }}
     />

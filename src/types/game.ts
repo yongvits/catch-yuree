@@ -23,6 +23,7 @@ export interface Weevil {
   isDying: boolean;
   scale: number;
   changeDirTimer: number;
+  idlePauseTimer?: number; // When > 0, weevil rests and stays still in place
   variant?: 'normal' | 'fast' | 'fat';
 }
 
@@ -73,6 +74,7 @@ export interface HerbItem {
   frameIndex: number; // 0..11 (0-3: chili, 4-7: lime leaf, 8-11: garlic)
   category: 'chili' | 'lime' | 'garlic';
   isForeground: boolean;
+  isDragging?: boolean;
 }
 
 export type GameDifficulty = 'easy' | 'normal' | 'hard' | 'extreme';

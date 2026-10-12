@@ -105,29 +105,20 @@ export default function App() {
     }
   }, []);
 
-  // 4-finger multi-touch listener to restore interface
+  // Desktop keyboard shortcut (H, Escape) to toggle interface
   useEffect(() => {
-    const handleTouchStart = (e: TouchEvent) => {
-      if (e.touches && e.touches.length >= 4) {
-        handleUnhideInterface();
-      }
-    };
-
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Desktop keyboard shortcut (H, Escape, 4) to toggle / restore interface
-      if (e.key === 'Escape' || e.key === 'h' || e.key === 'H' || e.key === '4') {
+      if (e.key === 'Escape' || e.key === 'h' || e.key === 'H') {
         setIsInterfaceHidden((prev) => !prev);
       }
     };
 
-    window.addEventListener('touchstart', handleTouchStart, { passive: true });
     window.addEventListener('keydown', handleKeyDown);
 
     return () => {
-      window.removeEventListener('touchstart', handleTouchStart);
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [handleUnhideInterface]);
+  }, []);
 
   // Best Records
   const [bestRecords, setBestRecords] = useState<Record<GameDifficulty, number | null>>(() => {
@@ -348,11 +339,10 @@ export default function App() {
         </div>
       )}
 
-      {/* Floating hint when Interface is hidden */}
+      {/* Floating hint when Interface is hidden (Display only - click 4 times on score to restore) */}
       {isInterfaceHidden && showUnhideHint && (
         <div
-          onClick={handleUnhideInterface}
-          className="absolute top-16 left-1/2 -translate-x-1/2 z-30 bg-black/85 backdrop-blur-md border border-amber-400/40 text-amber-200 px-4 py-2 rounded-2xl shadow-2xl text-xs md:text-sm animate-in fade-in slide-in-from-top-3 duration-300 cursor-pointer"
+          className="absolute top-16 left-1/2 -translate-x-1/2 z-30 bg-black/85 backdrop-blur-md border border-amber-400/40 text-amber-200 px-4 py-2 rounded-2xl shadow-2xl text-xs md:text-sm animate-in fade-in slide-in-from-top-3 duration-300 pointer-events-none select-none"
         >
           <span>{t.hudHiddenNotice}</span>
         </div>

@@ -82,10 +82,12 @@ class SpriteEngine {
   private isLoaded = false;
   private customImageSrc: string | null = null;
   private customLengthScale = 1.0;
+  private customSizeScale = 0.80; // Default 20% smaller per user request
   private onSpriteLoadedCallbacks: (() => void)[] = [];
 
   constructor() {
     this.loadSavedLengthScale();
+    this.loadSavedSizeScale();
     this.initDefaultProceduralSprites();
     this.initSpriteCascade();
   }
@@ -104,6 +106,22 @@ class SpriteEngine {
     }
   }
 
+  private loadSavedSizeScale() {
+    try {
+      const savedScale = localStorage.getItem('weevil_sprite_size_scale');
+      if (savedScale) {
+        const val = parseFloat(savedScale);
+        if (!isNaN(val) && val >= 0.4 && val <= 2.5) {
+          this.customSizeScale = val;
+          return;
+        }
+      }
+    } catch {
+      // ignore
+    }
+    this.customSizeScale = 0.80;
+  }
+
   public setLengthScale(scale: number) {
     this.customLengthScale = Math.max(0.6, Math.min(2.5, scale));
     try {
@@ -118,9 +136,27 @@ class SpriteEngine {
     return this.customLengthScale;
   }
 
-  // Load custom sprite in priority order: localStorage -> IndexedDB -> Bundled skin files in public
+  public setSizeScale(scale: number) {
+    this.customSizeScale = Math.max(0.4, Math.min(2.5, scale));
+    try {
+      localStorage.setItem('weevil_sprite_size_scale', this.customSizeScale.toString());
+    } catch {
+      // ignore
+    }
+    this.notifyLoaded();
+  }
+
+  public getSizeScale(): number {
+    return this.customSizeScale;
+  }
+
+  // Load custom sprite in priority order: Bundled skin files in public -> localStorage -> IndexedDB
   private async initSpriteCascade() {
-    // 1. Try localStorage
+    // 1. Try bundled skins in public folder first (0E437456..., weevil_skin.png, yuree.png)
+    const presetOk = await this.loadPresetSkin();
+    if (presetOk) return;
+
+    // 2. Try localStorage (if user uploaded a custom file in browser)
     try {
       const saved = localStorage.getItem('weevil_custom_spritesheet');
       if (saved && saved.startsWith('data:image/')) {
@@ -131,26 +167,16 @@ class SpriteEngine {
       // ignore
     }
 
-    // 2. Try IndexedDB (if localStorage failed or was cleared)
+    // 3. Try IndexedDB (if localStorage failed or was cleared)
     try {
       const idbSaved = await getFromIDB();
       if (idbSaved && idbSaved.startsWith('data:image/')) {
         const ok = await this.loadFromDataUrl(idbSaved);
-        if (ok) {
-          try {
-            localStorage.setItem('weevil_custom_spritesheet', idbSaved);
-          } catch {
-            // ignore
-          }
-          return;
-        }
+        if (ok) return;
       }
     } catch {
       // ignore
     }
-
-    // 3. Try bundled skins in public folder (uploaded character sprite 0E437456..., weevil_skin.png, yuree.png)
-    await this.loadPresetSkin();
   }
 
   // Attempts to load candidate bundled character skins from public directory
@@ -193,20 +219,89 @@ class SpriteEngine {
       try {
         const ok = await this.loadFromUrl(url);
         if (ok) {
-          // Cache in IDB & localStorage for instantaneous reload
-          if (this.customImageSrc) {
-            try {
-              localStorage.setItem('weevil_custom_spritesheet', this.customImageSrc);
-            } catch {
-              // ignore
-            }
-            saveToIDB(this.customImageSrc);
-          }
           return true;
         }
       } catch {
         // continue
       }
+    }
+    return false;
+  }
+
+  // Slices directly from HTMLImageElement into 8 frames (4 cols x 2 rows)
+  public sliceFromImageElement(img: HTMLImageElement): boolean {
+    const cols = 4;
+    const rows = 2;
+    const totalFrames = 8;
+    const frameWidth = Math.floor(img.width / cols);
+    const frameHeight = Math.floor(img.height / rows);
+
+    if (frameWidth <= 0 || frameHeight <= 0) {
+      return false;
+    }
+
+    const newFrames: HTMLCanvasElement[] = [];
+
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        if (newFrames.length >= totalFrames) break;
+
+        const frameCanvas = document.createElement('canvas');
+        frameCanvas.width = frameWidth;
+        frameCanvas.height = frameHeight;
+        const fCtx = frameCanvas.getContext('2d', { willReadFrequently: true });
+        if (!fCtx) continue;
+
+        fCtx.drawImage(
+          img,
+          c * frameWidth,
+          r * frameHeight,
+          frameWidth,
+          frameHeight,
+          0,
+          0,
+          frameWidth,
+          frameHeight
+        );
+
+        // Detect if frame is already a transparent PNG (check top-left corner)
+        const imgData = fCtx.getImageData(0, 0, frameWidth, frameHeight);
+        const data = imgData.data;
+        const cornerAlpha = data[3];
+        const isAlreadyTransparent = cornerAlpha === 0;
+
+        // Chroma-key white background ONLY IF the source image was not already transparent
+        if (!isAlreadyTransparent) {
+          for (let i = 0; i < data.length; i += 4) {
+            const red = data[i];
+            const green = data[i + 1];
+            const blue = data[i + 2];
+            const minVal = Math.min(red, green, blue);
+            const maxVal = Math.max(red, green, blue);
+            const sat = maxVal === 0 ? 0 : (maxVal - minVal) / maxVal;
+
+            if (minVal > 218 && sat < 0.16) {
+              if (minVal > 240) {
+                data[i + 3] = 0;
+              } else {
+                const factor = (minVal - 218) / 22;
+                data[i + 3] = Math.round(data[i + 3] * (1 - factor));
+              }
+            }
+          }
+          fCtx.putImageData(imgData, 0, 0);
+        }
+
+        newFrames.push(frameCanvas);
+      }
+    }
+
+    if (newFrames.length === totalFrames) {
+      this.frames = newFrames;
+      this.ghostFrames = this.generateGhostFrames(newFrames);
+      this.isLoaded = true;
+      this.notifyLoaded();
+      return true;
     }
     return false;
   }
@@ -220,27 +315,24 @@ class SpriteEngine {
       }
       img.onload = () => {
         try {
-          const maxDim = 1024;
-          let w = img.width;
-          let h = img.height;
-          if (w > maxDim || h > maxDim) {
-            if (w > h) {
-              h = Math.round((h * maxDim) / w);
-              w = maxDim;
-            } else {
-              w = Math.round((w * maxDim) / h);
-              h = maxDim;
+          const success = this.sliceFromImageElement(img);
+          if (success) {
+            try {
+              const canvas = document.createElement('canvas');
+              canvas.width = img.width;
+              canvas.height = img.height;
+              const ctx = canvas.getContext('2d');
+              if (ctx) {
+                ctx.drawImage(img, 0, 0);
+                this.customImageSrc = canvas.toDataURL('image/png');
+              }
+            } catch {
+              // ignore
             }
+            resolve(true);
+          } else {
+            resolve(false);
           }
-
-          const canvas = document.createElement('canvas');
-          canvas.width = w;
-          canvas.height = h;
-          const ctx = canvas.getContext('2d');
-          if (!ctx) return resolve(false);
-          ctx.drawImage(img, 0, 0, w, h);
-          const dataUrl = canvas.toDataURL('image/png');
-          this.loadFromDataUrl(dataUrl).then(resolve);
         } catch {
           resolve(false);
         }
@@ -326,11 +418,15 @@ class SpriteEngine {
   public async resetToDefault() {
     try {
       localStorage.removeItem('weevil_custom_spritesheet');
+      localStorage.removeItem('weevil_sprite_size_scale');
+      localStorage.removeItem('weevil_sprite_length_scale');
     } catch {
       // ignore
     }
     await clearFromIDB();
     this.customImageSrc = null;
+    this.customSizeScale = 0.80;
+    this.customLengthScale = 1.0;
     this.initDefaultProceduralSprites();
     this.notifyLoaded();
   }
@@ -854,7 +950,8 @@ class SpriteEngine {
 
     // Maintain true native aspect ratio of the spritesheet frame (Height / Width)
     const nativeAspect = (frame.height || 1) / (frame.width || 1);
-    const renderWidth = size * 2.8;
+    const effectiveSize = size * this.customSizeScale;
+    const renderWidth = effectiveSize * 2.8;
     const renderHeight = renderWidth * nativeAspect * this.customLengthScale;
 
     if (isGhost) {

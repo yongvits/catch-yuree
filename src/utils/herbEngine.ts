@@ -95,9 +95,13 @@ class HerbEngine {
     return !!this.customImageSrc;
   }
 
-  // Load priority: localStorage -> IndexedDB -> Bundled files -> Procedural
+  // Load priority: Bundled public images -> localStorage -> IndexedDB -> Procedural
   private async initHerbCascade() {
-    // 1. Check localStorage
+    // 1. Try bundled public images first (ensures latest updated repo file 3BC67C8E... is loaded)
+    const presetOk = await this.loadPresetHerbs();
+    if (presetOk) return;
+
+    // 2. Check localStorage (for user-uploaded custom files)
     try {
       const saved = localStorage.getItem('weevil_herbs_spritesheet');
       if (saved && saved.startsWith('data:image/')) {
@@ -108,26 +112,16 @@ class HerbEngine {
       // ignore
     }
 
-    // 2. Check IndexedDB
+    // 3. Check IndexedDB
     try {
       const idbSaved = await getFromIDB();
       if (idbSaved && idbSaved.startsWith('data:image/')) {
         const ok = await this.loadFromDataUrl(idbSaved);
-        if (ok) {
-          try {
-            localStorage.setItem('weevil_herbs_spritesheet', idbSaved);
-          } catch {
-            // ignore
-          }
-          return;
-        }
+        if (ok) return;
       }
     } catch {
       // ignore
     }
-
-    // 3. Try bundled public images
-    await this.loadPresetHerbs();
   }
 
   public async loadPresetHerbs(): Promise<boolean> {
@@ -166,19 +160,164 @@ class HerbEngine {
       try {
         const ok = await this.loadFromUrl(url);
         if (ok) {
-          if (this.customImageSrc) {
-            try {
-              localStorage.setItem('weevil_herbs_spritesheet', this.customImageSrc);
-            } catch {
-              // ignore
-            }
-            saveToIDB(this.customImageSrc);
-          }
           return true;
         }
       } catch {
         // continue
       }
+    }
+    return false;
+  }
+
+  // Slices directly from HTMLImageElement into 12 items (4 cols x 3 rows)
+  public sliceFromImageElement(img: HTMLImageElement): boolean {
+    const cols = 4;
+    const rows = 3;
+    const totalItems = 12;
+
+    const frameWidth = Math.floor(img.width / cols);
+    const frameHeight = Math.floor(img.height / rows);
+
+    if (frameWidth <= 0 || frameHeight <= 0) {
+      return false;
+    }
+
+    // Check if image matches legacy 1448x1086 dimensions that had boundary overlaps
+    const isLegacy1448 = Math.abs(img.width - 1448) < 10 && Math.abs(img.height - 1086) < 10;
+    const legacyBoxes: [number, number, number, number][] = [
+      // Row 0 Chilies: [minX, minY, maxX, maxY]
+      [27, 33, 389, 394],
+      [371, 24, 736, 399],
+      [724, 44, 1064, 395],
+      [1094, 23, 1410, 393],
+      // Row 1 Kaffir Lime Leaves
+      [28, 427, 314, 757],
+      [401, 426, 679, 748],
+      [766, 432, 1057, 767],
+      [1105, 450, 1423, 756],
+      // Row 2 Garlic / Shallot Cloves
+      [55, 770, 329, 1045],
+      [378, 764, 700, 1046],
+      [778, 777, 1054, 1050],
+      [1130, 759, 1415, 1047],
+    ];
+
+    const newFrames: HTMLCanvasElement[] = [];
+
+    // Temporary full-size canvas to sample & extract from img
+    const fullCanvas = document.createElement('canvas');
+    fullCanvas.width = img.width;
+    fullCanvas.height = img.height;
+    const fullCtx = fullCanvas.getContext('2d', { willReadFrequently: true });
+    if (!fullCtx) return false;
+    fullCtx.drawImage(img, 0, 0);
+
+    for (let index = 0; index < totalItems; index++) {
+      const r = Math.floor(index / cols);
+      const c = index % cols;
+
+      let srcX = c * frameWidth;
+      let srcY = r * frameHeight;
+      let srcW = frameWidth;
+      let srcH = frameHeight;
+
+      if (isLegacy1448 && legacyBoxes[index]) {
+        const [bx0, by0, bx1, by1] = legacyBoxes[index];
+        const pad = 6;
+        srcX = Math.max(0, bx0 - pad);
+        srcY = Math.max(0, by0 - pad);
+        srcW = Math.min(img.width - srcX, bx1 - bx0 + pad * 2);
+        srcH = Math.min(img.height - srcY, by1 - by0 + pad * 2);
+      }
+
+      // Extract raw chunk
+      const rawChunk = document.createElement('canvas');
+      rawChunk.width = srcW;
+      rawChunk.height = srcH;
+      const rawCtx = rawChunk.getContext('2d', { willReadFrequently: true });
+      if (!rawCtx) continue;
+
+      rawCtx.drawImage(fullCanvas, srcX, srcY, srcW, srcH, 0, 0, srcW, srcH);
+
+      const imgData = rawCtx.getImageData(0, 0, srcW, srcH);
+      const data = imgData.data;
+      const cornerAlpha = data[3];
+      const isAlreadyTransparent = cornerAlpha === 0;
+
+      // Chroma-key white background if needed
+      if (!isAlreadyTransparent) {
+        for (let i = 0; i < data.length; i += 4) {
+          const red = data[i];
+          const green = data[i + 1];
+          const blue = data[i + 2];
+          const minVal = Math.min(red, green, blue);
+          const maxVal = Math.max(red, green, blue);
+          const sat = maxVal === 0 ? 0 : (maxVal - minVal) / maxVal;
+
+          if (minVal > 220 && sat < 0.16) {
+            if (minVal > 242) {
+              data[i + 3] = 0;
+            } else {
+              const factor = (minVal - 220) / 22;
+              data[i + 3] = Math.round(data[i + 3] * (1 - factor));
+            }
+          }
+        }
+        rawCtx.putImageData(imgData, 0, 0);
+      }
+
+      // Auto-trim bounding box & center into a clean, unclipped square frame
+      let minX = srcW;
+      let minY = srcH;
+      let maxX = 0;
+      let maxY = 0;
+      let foundPixel = false;
+
+      for (let y = 0; y < srcH; y++) {
+        for (let x = 0; x < srcW; x++) {
+          const a = data[(y * srcW + x) * 4 + 3];
+          if (a > 15) {
+            foundPixel = true;
+            if (x < minX) minX = x;
+            if (x > maxX) maxX = x;
+            if (y < minY) minY = y;
+            if (y > maxY) maxY = y;
+          }
+        }
+      }
+
+      const frameCanvas = document.createElement('canvas');
+      if (foundPixel && maxX >= minX && maxY >= minY) {
+        const itemW = maxX - minX + 1;
+        const itemH = maxY - minY + 1;
+        const maxDim = Math.max(itemW, itemH);
+        const targetSize = Math.max(260, maxDim + 24); // Generous padding to prevent any edge clipping
+
+        frameCanvas.width = targetSize;
+        frameCanvas.height = targetSize;
+        const fCtx = frameCanvas.getContext('2d');
+        if (fCtx) {
+          const dstX = Math.round((targetSize - itemW) / 2);
+          const dstY = Math.round((targetSize - itemH) / 2);
+          fCtx.drawImage(rawChunk, minX, minY, itemW, itemH, dstX, dstY, itemW, itemH);
+        }
+      } else {
+        frameCanvas.width = srcW;
+        frameCanvas.height = srcH;
+        const fCtx = frameCanvas.getContext('2d');
+        if (fCtx) {
+          fCtx.drawImage(rawChunk, 0, 0);
+        }
+      }
+
+      newFrames.push(frameCanvas);
+    }
+
+    if (newFrames.length === totalItems) {
+      this.frames = newFrames;
+      this.isLoaded = true;
+      this.notifyLoaded();
+      return true;
     }
     return false;
   }
@@ -191,27 +330,24 @@ class HerbEngine {
       }
       img.onload = () => {
         try {
-          const maxDim = 1200;
-          let w = img.width;
-          let h = img.height;
-          if (w > maxDim || h > maxDim) {
-            if (w > h) {
-              h = Math.round((h * maxDim) / w);
-              w = maxDim;
-            } else {
-              w = Math.round((w * maxDim) / h);
-              h = maxDim;
+          const success = this.sliceFromImageElement(img);
+          if (success) {
+            try {
+              const canvas = document.createElement('canvas');
+              canvas.width = img.width;
+              canvas.height = img.height;
+              const ctx = canvas.getContext('2d');
+              if (ctx) {
+                ctx.drawImage(img, 0, 0);
+                this.customImageSrc = canvas.toDataURL('image/png');
+              }
+            } catch {
+              // ignore
             }
+            resolve(true);
+          } else {
+            resolve(false);
           }
-
-          const canvas = document.createElement('canvas');
-          canvas.width = w;
-          canvas.height = h;
-          const ctx = canvas.getContext('2d');
-          if (!ctx) return resolve(false);
-          ctx.drawImage(img, 0, 0, w, h);
-          const dataUrl = canvas.toDataURL('image/png');
-          this.loadFromDataUrl(dataUrl).then(resolve);
         } catch {
           resolve(false);
         }
@@ -236,35 +372,15 @@ class HerbEngine {
             img.src = rawDataUrl;
           });
 
-          const maxDim = 1200;
-          let w = img.width;
-          let h = img.height;
-          if (w > maxDim || h > maxDim) {
-            if (w > h) {
-              h = Math.round((h * maxDim) / w);
-              w = maxDim;
-            } else {
-              w = Math.round((w * maxDim) / h);
-              h = maxDim;
-            }
-          }
-
-          const resizeCanvas = document.createElement('canvas');
-          resizeCanvas.width = w;
-          resizeCanvas.height = h;
-          const rCtx = resizeCanvas.getContext('2d');
-          if (!rCtx) return resolve({ success: false, error: 'Canvas context unavailable' });
-          rCtx.drawImage(img, 0, 0, w, h);
-
-          const optimizedDataUrl = resizeCanvas.toDataURL('image/png');
-          const success = await this.loadFromDataUrl(optimizedDataUrl);
+          const success = this.sliceFromImageElement(img);
           if (success) {
+            this.customImageSrc = rawDataUrl;
             try {
-              localStorage.setItem('weevil_herbs_spritesheet', optimizedDataUrl);
+              localStorage.setItem('weevil_herbs_spritesheet', rawDataUrl);
             } catch {
               // ignore
             }
-            await saveToIDB(optimizedDataUrl);
+            await saveToIDB(rawDataUrl);
             resolve({ success: true });
           } else {
             resolve({ success: false, error: 'Could not slice 4x3 herbs grid' });
@@ -283,71 +399,9 @@ class HerbEngine {
     return new Promise((resolve) => {
       const img = new Image();
       img.onload = () => {
-        const cols = 4;
-        const rows = 3;
-        const totalItems = 12;
-        const frameWidth = Math.floor(img.width / cols);
-        const frameHeight = Math.floor(img.height / rows);
-
-        if (frameWidth <= 0 || frameHeight <= 0) {
-          return resolve(false);
-        }
-
-        const newFrames: HTMLCanvasElement[] = [];
-
-        for (let r = 0; r < rows; r++) {
-          for (let c = 0; c < cols; c++) {
-            if (newFrames.length >= totalItems) break;
-
-            const frameCanvas = document.createElement('canvas');
-            frameCanvas.width = frameWidth;
-            frameCanvas.height = frameHeight;
-            const fCtx = frameCanvas.getContext('2d', { willReadFrequently: true });
-            if (!fCtx) continue;
-
-            fCtx.drawImage(
-              img,
-              c * frameWidth,
-              r * frameHeight,
-              frameWidth,
-              frameHeight,
-              0,
-              0,
-              frameWidth,
-              frameHeight
-            );
-
-            // Chroma-key pure white and light gray background with smooth feathered edges
-            const imgData = fCtx.getImageData(0, 0, frameWidth, frameHeight);
-            const data = imgData.data;
-            for (let i = 0; i < data.length; i += 4) {
-              const red = data[i];
-              const green = data[i + 1];
-              const blue = data[i + 2];
-              const minVal = Math.min(red, green, blue);
-              const maxVal = Math.max(red, green, blue);
-              const sat = maxVal === 0 ? 0 : (maxVal - minVal) / maxVal;
-
-              // If bright and low saturation (white background)
-              if (minVal > 220 && sat < 0.16) {
-                if (minVal > 242) {
-                  data[i + 3] = 0;
-                } else {
-                  const factor = (minVal - 220) / 22;
-                  data[i + 3] = Math.round(data[i + 3] * (1 - factor));
-                }
-              }
-            }
-            fCtx.putImageData(imgData, 0, 0);
-            newFrames.push(frameCanvas);
-          }
-        }
-
-        if (newFrames.length === totalItems) {
-          this.frames = newFrames;
-          this.isLoaded = true;
+        const ok = this.sliceFromImageElement(img);
+        if (ok) {
           this.customImageSrc = dataUrl;
-          this.notifyLoaded();
           resolve(true);
         } else {
           resolve(false);
