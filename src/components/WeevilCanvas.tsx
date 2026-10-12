@@ -624,27 +624,24 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
             stateRef.current.maxCombo = stateRef.current.combo;
           }
 
-          // Floating text
+          // Combo sound tracking (no floating text per user request)
           if (stateRef.current.combo > 1) {
             soundManager.playCombo(stateRef.current.combo);
-            addFloatingText(w.x, w.y, `${comboPrefix}${stateRef.current.combo}!`, '#38bdf8');
-          } else {
-            addFloatingText(w.x, w.y, ascendedText, '#38bdf8');
           }
 
-          // Released ghost (Expands 1x larger [2.0x scale] before disappearing, duration +50%)
+          // Released ghost (ตัวใหญ่ขึ้นมาอีก 2 เท่า และลอยขึ้น)
           stateRef.current.ghostIdCounter++;
           stateRef.current.ghosts.push({
             id: stateRef.current.ghostIdCounter,
             x: w.x,
             y: w.y,
             frameIndex: Math.floor(w.legsPhase) % 8,
-            floatSpeed: 0, // ไม่ลอยขึ้น! (stationary Y, ไม่ลอยขึ้นบนจอ)
+            floatSpeed: 0.95 + Math.random() * 0.25, // ลอยขึ้นอย่างนุ่มนวล
             zoomSpeed: 0.011,
             scale: 1.0,
             rotation: w.rotation,
             opacity: 1.0,
-            fadeSpeed: 0.011, // เพิ่มเวลาขึ้นครึ่งหนึ่ง (+50% duration: ~1.5 - 1.6 วินาที)
+            fadeSpeed: 0.011, // ~1.5 - 1.6 วินาที
             wavePhase: Math.random() * Math.PI,
             wingPhase: Math.random() * 10,
             size: w.size,
@@ -1024,14 +1021,16 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
             }
           }
 
-          // --- 3. Update Ghosts (Expands until 1x larger [2.0x scale] before disappearing, duration +50%) ---
+          // --- 3. Update Ghosts (ตัวใหญ่ขึ้นมาอีก 2 เท่า และลอยขึ้นสู่เบื้องบน) ---
           for (let i = ghosts.length - 1; i >= 0; i--) {
             const g = ghosts[i];
-            // Stationary Y position (ไม่ลอยขึ้นนะ)
+            g.y -= g.floatSpeed; // ลอยขึ้น
+            g.wavePhase += 0.026;
+            g.x += Math.sin(g.wavePhase) * 0.32; // พริ้วไหวเบา ๆ ขณะลอยขึ้น
             g.opacity -= g.fadeSpeed;
-            // ขยายใหญ่กว่าเดิม 1 เท่า (scale จาก 1.0 ถึง 2.0x) ก่อนจะหายไป
+            // ตัวใหญ่ขึ้นมาอีก 2 เท่า (ขยายตัวขึ้นเป็น ~3.2 เท่า) ก่อนจะหายไป
             const progress = Math.max(0, Math.min(1, 1 - g.opacity));
-            g.scale = 1.0 + progress * 1.0;
+            g.scale = 1.0 + progress * 2.2;
             g.wingPhase += 0.18;
 
             // Soft glowing trail dust as the soul peacefully dissolves
@@ -1040,7 +1039,7 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
                 x: g.x + (Math.random() - 0.5) * g.size * g.scale * 0.7,
                 y: g.y + (Math.random() - 0.5) * g.size * g.scale * 0.7,
                 vx: (Math.random() - 0.5) * 0.7,
-                vy: (Math.random() - 0.5) * 0.7,
+                vy: (Math.random() - 0.5) * 0.7 - 0.25,
                 size: 1.2 + Math.random() * 2.5,
                 color: Math.random() > 0.4 ? '#38bdf8' : '#bae6fd',
                 life: 0.7,
@@ -1048,7 +1047,7 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
               });
             }
 
-            if (g.opacity <= 0) {
+            if (g.opacity <= 0 || g.y < -120) {
               ghosts.splice(i, 1);
             }
           }
