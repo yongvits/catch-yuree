@@ -1,11 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { soundManager } from '../audio/soundManager';
 
 interface TitleScreenProps {
   onStartGame: () => void;
 }
 
-// "Tap to Start" button: uses the user's uploaded Image 1 (A9BC3D04-3E6A-471B-B545-EDE2038E33DF.png)
+// "Tap to Start" wooden plank button: uses user's uploaded Image 1 (A9BC3D04-3E6A-471B-B545-EDE2038E33DF.png)
 // with high-fidelity vector fallback
 export const TapToStartButton: React.FC<{ onClick?: () => void; className?: string }> = ({
   onClick,
@@ -187,6 +187,25 @@ export const TapToStartButton: React.FC<{ onClick?: () => void; className?: stri
 };
 
 export const TitleScreen: React.FC<TitleScreenProps> = ({ onStartGame }) => {
+  const [isPortrait, setIsPortrait] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      return window.innerHeight > window.innerWidth;
+    }
+    return false;
+  });
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsPortrait(window.innerHeight > window.innerWidth);
+    };
+    window.addEventListener('resize', handleResize);
+    window.addEventListener('orientationchange', handleResize);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('orientationchange', handleResize);
+    };
+  }, []);
+
   const handleStart = () => {
     soundManager.playHerbPick();
     if (typeof navigator !== 'undefined' && navigator.vibrate) {
@@ -202,31 +221,46 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({ onStartGame }) => {
   return (
     <div
       onClick={handleStart}
-      className="absolute inset-0 z-40 w-screen h-screen overflow-hidden flex items-center justify-center cursor-pointer select-none font-['Kanit',sans-serif]"
+      className="absolute inset-0 z-40 w-screen h-screen overflow-hidden flex flex-col items-center justify-between cursor-pointer select-none font-['Kanit',sans-serif] bg-[#f8edd2]"
     >
-      {/* 1. BACKGROUND TITLE ARTWORK: IMAGE 2 (45391EA8-300F-4772-9A89-BD4AB5BC24DD.png) as explicitly requested */}
-      <img
-        src="45391EA8-300F-4772-9A89-BD4AB5BC24DD.png"
-        alt="Rice Weevil Catcher Title Background"
-        referrerPolicy="no-referrer"
-        onError={(e) => {
-          const target = e.currentTarget;
-          if (!target.dataset.retried) {
-            target.dataset.retried = '1';
-            target.src = '/45391EA8-300F-4772-9A89-BD4AB5BC24DD.png';
-          } else if (target.dataset.retried === '1') {
-            target.dataset.retried = '2';
-            target.src = '/title_bg.png';
-          }
-        }}
-        className="absolute inset-0 w-full h-full object-cover object-center pointer-events-none"
-      />
+      {/* Title Background Artwork:
+          - แนวนอน (Landscape): fit ตามความยาวเต็มหน้าจอ (object-cover landscape:object-center w-full h-full)
+          - แนวตั้ง (Portrait): ใช้การ crop (object-cover) และยึดให้อ่านชื่อเกมส์ได้ชัดเจน (portrait:object-top / center top) */}
+      <div className="absolute inset-0 w-full h-full flex flex-col items-center justify-between pointer-events-none overflow-hidden select-none">
+        <img
+          src="TitleBG.png"
+          alt="Catch Yuree! Rice Weevil Catcher"
+          referrerPolicy="no-referrer"
+          onError={(e) => {
+            const target = e.currentTarget;
+            if (!target.dataset.retried) {
+              target.dataset.retried = '1';
+              target.src = '/TitleBG.png';
+            } else if (target.dataset.retried === '1') {
+              target.dataset.retried = '2';
+              target.src = '/title_bg.png';
+            } else if (target.dataset.retried === '2') {
+              target.dataset.retried = '3';
+              target.src = '/45391EA8-300F-4772-9A89-BD4AB5BC24DD.png';
+            } else if (target.dataset.retried === '3') {
+              target.dataset.retried = '4';
+              target.src = '/5CA03805-705C-4F65-B087-08FF43F4CB6B.png';
+            }
+          }}
+          className="w-full h-full object-cover landscape:object-center portrait:object-top transition-all duration-300"
+          style={{
+            objectFit: 'cover',
+            objectPosition: isPortrait ? 'center top' : 'center center',
+          }}
+        />
+        {/* Soft atmospheric gradient for crisp UI contrast */}
+        <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-transparent to-black/30 pointer-events-none" />
+      </div>
 
-      {/* Subtle warm ambient overlay ensuring button contrast */}
-      <div className="absolute inset-0 bg-black/10 pointer-events-none" />
-
-      {/* 2. EXACT CENTER: THE "Tap to Start" WOODEN BUTTON (ย้ายปุ่มตอน Title มาไว้ตรงกลาง เรียบ ๆ ไม่เอา interface setting อื่น ๆ) */}
-      <div className="relative z-30 flex items-center justify-center pointer-events-auto p-4">
+      {/* Center / Lower Button: "Tap to Start" Wooden Button */}
+      {/* ในแนวนอน: กึ่งกลางหน้าจอ (landscape:m-auto) */}
+      {/* ในแนวตั้ง: ส่วนล่าง เพื่อไม่บังชื่อเกมส์ด้านบน ให้อ่านชื่อเกมส์ได้ชัดเจน 100% (portrait:mt-auto portrait:mb-12) */}
+      <div className="relative z-30 flex items-center justify-center pointer-events-auto p-4 landscape:m-auto portrait:mt-auto portrait:mb-12 sm:portrait:mb-16">
         <TapToStartButton onClick={handleStart} className="animate-pulse drop-shadow-[0_20px_40px_rgba(0,0,0,0.85)]" />
       </div>
     </div>
