@@ -229,7 +229,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({ onStartGame }) => {
   return (
     <div
       onClick={handleStart}
-      className="fixed inset-0 z-40 w-screen h-screen w-dvw h-dvh overflow-hidden flex flex-col items-center justify-between cursor-pointer select-none font-['Kanit',sans-serif] bg-[#f8edd2]"
+      className="fixed inset-0 z-40 w-screen h-screen w-dvw h-dvh overflow-hidden flex items-center justify-center cursor-pointer select-none font-['Kanit',sans-serif] bg-[#f8edd2]"
     >
       {/* Title Background:
           - แนวนอน (Landscape): TitleBG.png เต็มหน้าจอ (Full screen)
@@ -247,6 +247,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({ onStartGame }) => {
             srcSet="/TitleBG.png"
           />
           <img
+            key={isPortrait ? 'portrait' : 'landscape'}
             src={isPortrait ? '/TitleBG_portrait.png' : '/TitleBG.png'}
             alt="Squash Yuree! Rice Weevil Smasher"
             referrerPolicy="no-referrer"
@@ -262,9 +263,8 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({ onStartGame }) => {
         </picture>
       </div>
 
-      {/* Center / Lower Button: "Tap to Start" Wooden Button */}
-      {/* วางไว้ส่วนล่างให้อ่านชื่อเกมส์ตรงกลางได้ชัดเจน 100% */}
-      <div className="relative z-30 flex items-center justify-center pointer-events-auto p-4 mt-auto mb-10 sm:mb-14">
+      {/* Center Button: "Tap to Start" Wooden Button */}
+      <div className="relative z-30 flex items-center justify-center pointer-events-auto p-4">
         <TapToStartButton onClick={handleStart} className="animate-pulse drop-shadow-[0_20px_40px_rgba(0,0,0,0.85)]" />
       </div>
     </div>
