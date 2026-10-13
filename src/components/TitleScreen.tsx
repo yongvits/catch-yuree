@@ -5,6 +5,41 @@ interface TitleScreenProps {
   onStartGame: () => void;
 }
 
+// Helper to resolve asset URLs correctly across local dev, Vite base, and GitHub Pages (e.g. /catch-yuree/)
+export const resolveAssetPath = (fileName: string): string => {
+  const cleanName = fileName.replace(/^\/+/, '');
+  if (typeof window !== 'undefined') {
+    const pathname = window.location.pathname;
+    let base = '/';
+    if (pathname && pathname !== '/') {
+      if (pathname.endsWith('/')) {
+        base = pathname;
+      } else if (/\.[a-zA-Z0-9]+$/.test(pathname)) {
+        base = pathname.replace(/\/[^/]*$/, '/');
+      } else {
+        base = `${pathname}/`;
+      }
+    }
+    return `${base}${cleanName}`;
+  }
+  const viteBase = import.meta.env.BASE_URL || './';
+  const cleanBase = viteBase.endsWith('/') ? viteBase : `${viteBase}/`;
+  return `${cleanBase}${cleanName}`;
+};
+
+export const getAssetCandidates = (fileName: string): string[] => {
+  const cleanName = fileName.replace(/^\/+/, '');
+  const resolved = resolveAssetPath(cleanName);
+  const candidates = [
+    resolved,
+    `./${cleanName}`,
+    cleanName,
+    `/catch-yuree/${cleanName}`,
+    `/${cleanName}`,
+  ];
+  return Array.from(new Set(candidates));
+};
+
 // "Tap to Start" wooden plank button: uses user's uploaded Image 1 (A9BC3D04-3E6A-471B-B545-EDE2038E33DF.png)
 // with high-fidelity vector fallback
 export const TapToStartButton: React.FC<{ onClick?: () => void; className?: string }> = ({
@@ -12,6 +47,16 @@ export const TapToStartButton: React.FC<{ onClick?: () => void; className?: stri
   className,
 }) => {
   const [imgFailed, setImgFailed] = useState(false);
+  const [attemptIndex, setAttemptIndex] = useState(0);
+  const buttonCandidates = getAssetCandidates('A9BC3D04-3E6A-471B-B545-EDE2038E33DF.png');
+
+  const handleBtnError = () => {
+    if (attemptIndex < buttonCandidates.length - 1) {
+      setAttemptIndex(attemptIndex + 1);
+    } else {
+      setImgFailed(true);
+    }
+  };
 
   return (
     <button
@@ -25,18 +70,11 @@ export const TapToStartButton: React.FC<{ onClick?: () => void; className?: stri
     >
       {!imgFailed ? (
         <img
-          src="A9BC3D04-3E6A-471B-B545-EDE2038E33DF.png"
+          key={buttonCandidates[attemptIndex]}
+          src={buttonCandidates[attemptIndex]}
           alt="Tap to Start"
           referrerPolicy="no-referrer"
-          onError={(e) => {
-            const target = e.currentTarget;
-            if (!target.dataset.retried) {
-              target.dataset.retried = '1';
-              target.src = '/A9BC3D04-3E6A-471B-B545-EDE2038E33DF.png';
-            } else {
-              setImgFailed(true);
-            }
-          }}
+          onError={handleBtnError}
           className="w-72 sm:w-88 md:w-[440px] h-auto drop-shadow-[0_16px_36px_rgba(0,0,0,0.75)] group-hover:scale-105 group-active:scale-95 transition-transform duration-200 object-contain pointer-events-none select-none"
         />
       ) : (
@@ -218,13 +256,26 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({ onStartGame }) => {
     onStartGame();
   };
 
-  const handleImageError = (e: React.SyntheticEvent<HTMLImageElement>) => {
-    const target = e.currentTarget;
-    if (!target.dataset.retried) {
-      target.dataset.retried = '1';
-      target.src = isPortrait ? 'TitleBG_portrait.png' : 'TitleBG.png';
+  const portraitCandidates = getAssetCandidates('TitleBG_portrait.png');
+  const landscapeCandidates = getAssetCandidates('TitleBG.png');
+
+  const [portraitIdx, setPortraitIdx] = useState(0);
+  const [landscapeIdx, setLandscapeIdx] = useState(0);
+
+  const handleImageError = () => {
+    if (isPortrait) {
+      if (portraitIdx < portraitCandidates.length - 1) {
+        setPortraitIdx((prev) => prev + 1);
+      }
+    } else {
+      if (landscapeIdx < landscapeCandidates.length - 1) {
+        setLandscapeIdx((prev) => prev + 1);
+      }
     }
   };
+
+  const currentPortraitSrc = portraitCandidates[portraitIdx];
+  const currentLandscapeSrc = landscapeCandidates[landscapeIdx];
 
   return (
     <div
@@ -239,16 +290,16 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({ onStartGame }) => {
           {/* Portrait orientation: TitleBG_portrait.png */}
           <source
             media="(orientation: portrait)"
-            srcSet="/TitleBG_portrait.png"
+            srcSet={currentPortraitSrc}
           />
           {/* Landscape orientation: TitleBG.png */}
           <source
             media="(orientation: landscape)"
-            srcSet="/TitleBG.png"
+            srcSet={currentLandscapeSrc}
           />
           <img
-            key={isPortrait ? 'portrait' : 'landscape'}
-            src={isPortrait ? '/TitleBG_portrait.png' : '/TitleBG.png'}
+            key={`${isPortrait ? 'portrait' : 'landscape'}-${isPortrait ? portraitIdx : landscapeIdx}`}
+            src={isPortrait ? currentPortraitSrc : currentLandscapeSrc}
             alt="Squash Yuree! Rice Weevil Smasher"
             referrerPolicy="no-referrer"
             onError={handleImageError}
