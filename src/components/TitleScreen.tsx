@@ -222,16 +222,10 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({ onStartGame }) => {
     const target = e.currentTarget;
     if (!target.dataset.retried) {
       target.dataset.retried = '1';
-      target.src = '/07D3CBE3-DF6B-4DD8-9099-5466F4B185FF.png';
+      target.src = '/TitleBG_portrait.png';
     } else if (target.dataset.retried === '1') {
       target.dataset.retried = '2';
-      target.src = '/TitleBG_portrait.png';
-    } else if (target.dataset.retried === '2') {
-      target.dataset.retried = '3';
-      target.src = '/title_bg_portrait.png';
-    } else if (target.dataset.retried === '3') {
-      target.dataset.retried = '4';
-      target.src = '/TitleBG.png';
+      target.src = 'TitleBG_portrait.PNG';
     }
   };
 
@@ -239,57 +233,51 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({ onStartGame }) => {
     const target = e.currentTarget;
     if (!target.dataset.retried) {
       target.dataset.retried = '1';
-      target.src = '/96210FFD-D831-439F-A928-E9D105DEE79C.png';
+      target.src = '/TitleBG.png';
     } else if (target.dataset.retried === '1') {
       target.dataset.retried = '2';
-      target.src = '/TitleBG.png';
-    } else if (target.dataset.retried === '2') {
-      target.dataset.retried = '3';
-      target.src = '/title_bg_landscape.png';
-    } else if (target.dataset.retried === '3') {
-      target.dataset.retried = '4';
-      target.src = '/title_bg.png';
+      target.src = 'TitleBG.PNG';
     }
   };
 
   return (
     <div
       onClick={handleStart}
-      className="absolute inset-0 z-40 w-screen h-screen overflow-hidden flex flex-col items-center justify-between cursor-pointer select-none font-['Kanit',sans-serif] bg-[#f8edd2]"
+      className="fixed inset-0 z-40 w-screen h-screen w-dvw h-dvh overflow-hidden flex flex-col items-center justify-between cursor-pointer select-none font-['Kanit',sans-serif] bg-[#f8edd2]"
     >
       {/* Title Background:
-          - แนวนอน (Landscape): ใช้รูปแรก (96210FFD-D831-439F-A928-E9D105DEE79C.png / TitleBG.png) fit เต็มหน้าจอ
-          - แนวตั้ง (Portrait): ใช้รูปที่สอง (07D3CBE3-DF6B-4DD8-9099-5466F4B185FF.png / TitleBG_portrait.png) fit เต็มหน้าจอ */}
-      <div className="absolute inset-0 w-full h-full flex flex-col items-center justify-between pointer-events-none overflow-hidden select-none">
+          - แนวนอน (Landscape): TitleBG.png เต็มหน้าจอ (Full screen)
+          - แนวตั้ง (Portrait): TitleBG_portrait.png เต็มหน้าจอ (Full screen) */}
+      <div className="absolute inset-0 w-full h-full pointer-events-none overflow-hidden select-none">
         <picture className="w-full h-full block">
-          {/* Portrait orientation source (Image 2) */}
+          {/* Portrait orientation: TitleBG_portrait.png */}
           <source
             media="(orientation: portrait)"
-            srcSet="07D3CBE3-DF6B-4DD8-9099-5466F4B185FF.png, /07D3CBE3-DF6B-4DD8-9099-5466F4B185FF.png, /TitleBG_portrait.png"
+            srcSet="TitleBG_portrait.png, /TitleBG_portrait.png"
           />
-          {/* Landscape orientation source (Image 1) */}
+          {/* Landscape orientation: TitleBG.png */}
           <source
             media="(orientation: landscape)"
-            srcSet="96210FFD-D831-439F-A928-E9D105DEE79C.png, /96210FFD-D831-439F-A928-E9D105DEE79C.png, /TitleBG.png"
+            srcSet="TitleBG.png, /TitleBG.png"
           />
           <img
-            src={isPortrait ? '07D3CBE3-DF6B-4DD8-9099-5466F4B185FF.png' : '96210FFD-D831-439F-A928-E9D105DEE79C.png'}
+            src={isPortrait ? 'TitleBG_portrait.png' : 'TitleBG.png'}
             alt="Squash Yuree! Rice Weevil Smasher"
             referrerPolicy="no-referrer"
             onError={isPortrait ? handlePortraitError : handleLandscapeError}
-            className="w-full h-full object-cover object-center transition-all duration-300 pointer-events-none select-none"
+            className="w-full h-full object-cover object-center pointer-events-none select-none block"
             style={{
+              width: '100%',
+              height: '100%',
               objectFit: 'cover',
               objectPosition: 'center center',
             }}
           />
         </picture>
-        {/* Soft atmospheric gradient for crisp UI contrast */}
-        <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-transparent to-black/30 pointer-events-none" />
       </div>
 
       {/* Center / Lower Button: "Tap to Start" Wooden Button */}
-      {/* ในแนวนอนและแนวตั้ง: วางไว้ส่วนล่าง เพื่อไม่ให้บังชื่อเกมส์และตัวมอดใหญ่ตรงกลาง ให้อ่านชื่อเกมส์ได้ชัดเจน 100% */}
+      {/* วางไว้ส่วนล่างให้อ่านชื่อเกมส์ตรงกลางได้ชัดเจน 100% */}
       <div className="relative z-30 flex items-center justify-center pointer-events-auto p-4 mt-auto mb-10 sm:mb-14">
         <TapToStartButton onClick={handleStart} className="animate-pulse drop-shadow-[0_20px_40px_rgba(0,0,0,0.85)]" />
       </div>
