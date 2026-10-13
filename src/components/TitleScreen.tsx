@@ -218,25 +218,11 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({ onStartGame }) => {
     onStartGame();
   };
 
-  const handlePortraitError = (e: React.SyntheticEvent<HTMLImageElement>) => {
+  const handleImageError = (e: React.SyntheticEvent<HTMLImageElement>) => {
     const target = e.currentTarget;
     if (!target.dataset.retried) {
       target.dataset.retried = '1';
-      target.src = '/TitleBG_portrait.png';
-    } else if (target.dataset.retried === '1') {
-      target.dataset.retried = '2';
-      target.src = 'TitleBG_portrait.PNG';
-    }
-  };
-
-  const handleLandscapeError = (e: React.SyntheticEvent<HTMLImageElement>) => {
-    const target = e.currentTarget;
-    if (!target.dataset.retried) {
-      target.dataset.retried = '1';
-      target.src = '/TitleBG.png';
-    } else if (target.dataset.retried === '1') {
-      target.dataset.retried = '2';
-      target.src = 'TitleBG.PNG';
+      target.src = isPortrait ? 'TitleBG_portrait.png' : 'TitleBG.png';
     }
   };
 
@@ -253,18 +239,18 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({ onStartGame }) => {
           {/* Portrait orientation: TitleBG_portrait.png */}
           <source
             media="(orientation: portrait)"
-            srcSet="TitleBG_portrait.png, /TitleBG_portrait.png"
+            srcSet="/TitleBG_portrait.png"
           />
           {/* Landscape orientation: TitleBG.png */}
           <source
             media="(orientation: landscape)"
-            srcSet="TitleBG.png, /TitleBG.png"
+            srcSet="/TitleBG.png"
           />
           <img
-            src={isPortrait ? 'TitleBG_portrait.png' : 'TitleBG.png'}
+            src={isPortrait ? '/TitleBG_portrait.png' : '/TitleBG.png'}
             alt="Squash Yuree! Rice Weevil Smasher"
             referrerPolicy="no-referrer"
-            onError={isPortrait ? handlePortraitError : handleLandscapeError}
+            onError={handleImageError}
             className="w-full h-full object-cover object-center pointer-events-none select-none block"
             style={{
               width: '100%',
