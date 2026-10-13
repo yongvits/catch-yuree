@@ -262,6 +262,18 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({ onStartGame }) => {
   const [portraitIdx, setPortraitIdx] = useState(0);
   const [landscapeIdx, setLandscapeIdx] = useState(0);
 
+  // Preload both orientation images into browser cache early
+  useEffect(() => {
+    try {
+      const pImg = new Image();
+      pImg.src = portraitCandidates[0];
+      const lImg = new Image();
+      lImg.src = landscapeCandidates[0];
+    } catch {
+      // ignore
+    }
+  }, [portraitCandidates, landscapeCandidates]);
+
   const handleImageError = () => {
     if (isPortrait) {
       if (portraitIdx < portraitCandidates.length - 1) {
@@ -280,13 +292,16 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({ onStartGame }) => {
   return (
     <div
       onClick={handleStart}
-      className="fixed inset-0 z-40 w-screen h-screen w-dvw h-dvh overflow-hidden flex items-center justify-center cursor-pointer select-none font-['Kanit',sans-serif] bg-[#f8edd2]"
+      className="fixed inset-0 z-50 w-screen h-screen w-dvw h-dvh overflow-hidden flex items-center justify-center cursor-pointer select-none font-[kanit,sans-serif] bg-black"
     >
       {/* Title Background:
           - แนวนอน (Landscape): TitleBG.png เต็มหน้าจอ (Full screen)
           - แนวตั้ง (Portrait): TitleBG_portrait.png เต็มหน้าจอ (Full screen) */}
-      <div className="absolute inset-0 w-full h-full pointer-events-none overflow-hidden select-none">
-        <picture className="w-full h-full block">
+      <div className="absolute inset-0 w-full h-full pointer-events-none overflow-hidden select-none bg-black">
+        <picture
+          key={`${isPortrait ? "portrait" : "landscape"}-${portraitIdx}-${landscapeIdx}`}
+          className="w-full h-full block"
+        >
           {/* Portrait orientation: TitleBG_portrait.png */}
           <source
             media="(orientation: portrait)"
@@ -298,17 +313,16 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({ onStartGame }) => {
             srcSet={currentLandscapeSrc}
           />
           <img
-            key={`${isPortrait ? 'portrait' : 'landscape'}-${isPortrait ? portraitIdx : landscapeIdx}`}
             src={isPortrait ? currentPortraitSrc : currentLandscapeSrc}
             alt="Squash Yuree! Rice Weevil Smasher"
             referrerPolicy="no-referrer"
             onError={handleImageError}
             className="w-full h-full object-cover object-center pointer-events-none select-none block"
             style={{
-              width: '100%',
-              height: '100%',
-              objectFit: 'cover',
-              objectPosition: 'center center',
+              width: "100%",
+              height: "100%",
+              objectFit: "cover",
+              objectPosition: "center center",
             }}
           />
         </picture>

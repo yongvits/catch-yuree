@@ -347,17 +347,19 @@ export default function App() {
       )}
 
       {/* Main Fullscreen Canvas Game Engine */}
-      <WeevilCanvas
-        key={gameKey}
-        totalCount={difficulties[difficulty].count}
-        ascendedText={t.canvasAscended}
-        comboPrefix={t.canvasCombo}
-        isPaused={showTitleScreen || showSettings || showKnowledge || showSpriteModal}
-        onCountChange={handleCountChange}
-        onVictory={handleVictory}
-        onHit={handleHit}
-        onMiss={handleMiss}
-      />
+      {!showTitleScreen && (
+        <WeevilCanvas
+          key={gameKey}
+          totalCount={difficulties[difficulty].count}
+          ascendedText={t.canvasAscended}
+          comboPrefix={t.canvasCombo}
+          isPaused={showSettings || showKnowledge || showSpriteModal}
+          onCountChange={handleCountChange}
+          onVictory={handleVictory}
+          onHit={handleHit}
+          onMiss={handleMiss}
+        />
+      )}
 
       {/* Modern HUD with floating stats & controls */}
       {!showTitleScreen && (
