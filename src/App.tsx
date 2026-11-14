@@ -395,15 +395,15 @@ export default function App() {
 
       {/* Title Screen Overlay before entering game (Clean title with Tap to Start) */}
       {showTitleScreen && (
-        <TitleScreen
-          onStartGame={handleStartGame}
-          language={language}
-          isOfflineReady={isOfflineReady}
-        />
+        <>
+          <TitleScreen
+            onStartGame={handleStartGame}
+            language={language}
+            isOfflineReady={isOfflineReady}
+          />
+          <OfflineIndicator language={language} />
+        </>
       )}
-
-      {/* Offline status banner when disconnected */}
-      <OfflineIndicator language={language} />
 
       {/* Victory Modal */}
       <VictoryModal

@@ -60,6 +60,7 @@ export default defineConfig(() => {
             '**/weevil_skin.png',
             '**/yuree.png',
             '**/404.html',
+            '**/assets/aistudio/**',
           ],
           cleanupOutdatedCaches: true,
           clientsClaim: true,
