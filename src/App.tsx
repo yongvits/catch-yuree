@@ -11,6 +11,8 @@ import { soundManager } from './audio/soundManager';
 import { translations, Language } from './i18n/translations';
 import { spriteEngine } from './utils/spriteEngine';
 import { Upload } from 'lucide-react';
+import { OfflineIndicator } from './components/OfflineIndicator';
+import { subscribeOfflineReady } from './utils/pwaRegistration';
 
 const DIFFICULTY_ORDER: GameDifficulty[] = ['easy', 'normal', 'hard', 'extreme'];
 
@@ -71,6 +73,13 @@ export default function App() {
   // Drag & drop indicator
   const [isWindowDragging, setIsWindowDragging] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [isOfflineReady, setIsOfflineReady] = useState(false);
+
+  useEffect(() => {
+    return subscribeOfflineReady((ready) => {
+      setIsOfflineReady(ready);
+    });
+  }, []);
 
   // Victory Stats
   const [victoryStats, setVictoryStats] = useState({
@@ -386,8 +395,11 @@ export default function App() {
 
       {/* Title Screen Overlay before entering game (Clean title with Tap to Start) */}
       {showTitleScreen && (
-        <TitleScreen onStartGame={handleStartGame} />
+        <TitleScreen onStartGame={handleStartGame} language={language} />
       )}
+
+      {/* Offline status banner when disconnected */}
+      <OfflineIndicator language={language} />
 
       {/* Victory Modal */}
       <VictoryModal
@@ -413,6 +425,7 @@ export default function App() {
         bestRecords={bestRecords}
         language={language}
         t={t}
+        isOfflineReady={isOfflineReady}
         onSelectDifficulty={handleSelectDifficulty}
         onToggleMute={handleToggleMute}
         onSelectLanguage={(lang) => setLanguage(lang)}

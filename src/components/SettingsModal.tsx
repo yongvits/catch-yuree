@@ -2,6 +2,7 @@ import React from 'react';
 import { X, Check, Volume2, VolumeX, Globe } from 'lucide-react';
 import { GameDifficulty, DifficultyConfig } from '../types/game';
 import { TranslationStrings, Language } from '../i18n/translations';
+import { PWAInstallButton } from './PWAInstallButton';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -11,6 +12,7 @@ interface SettingsModalProps {
   bestRecords: Record<GameDifficulty, number | null>;
   language: Language;
   t: TranslationStrings;
+  isOfflineReady?: boolean;
   onSelectDifficulty: (difficulty: GameDifficulty) => void;
   onToggleMute: () => void;
   onSelectLanguage: (lang: Language) => void;
@@ -25,6 +27,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   bestRecords,
   language,
   t,
+  isOfflineReady = false,
   onSelectDifficulty,
   onToggleMute,
   onSelectLanguage,
@@ -152,6 +155,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             {isMuted ? t.settingsAudioOff : t.settingsAudioOn}
           </button>
         </div>
+
+        {/* Offline Mode & Install App */}
+        <PWAInstallButton
+          language={language}
+          variant="panel"
+          isOfflineReady={isOfflineReady}
+        />
 
         {/* Footer Close Button */}
         <button

@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { soundManager } from '../audio/soundManager';
+import { Language } from '../i18n/translations';
+import { PWAInstallButton } from './PWAInstallButton';
 
 interface TitleScreenProps {
   onStartGame: () => void;
+  language?: Language;
 }
 
 // Helper to resolve asset URLs correctly across local dev, Vite base, and GitHub Pages (e.g. /catch-yuree/)
@@ -224,7 +227,7 @@ export const TapToStartButton: React.FC<{ onClick?: () => void; className?: stri
   );
 };
 
-export const TitleScreen: React.FC<TitleScreenProps> = ({ onStartGame }) => {
+export const TitleScreen: React.FC<TitleScreenProps> = ({ onStartGame, language = 'th' }) => {
   const [isPortrait, setIsPortrait] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
       return window.innerHeight > window.innerWidth;
@@ -331,6 +334,13 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({ onStartGame }) => {
       {/* Center Button: "Tap to Start" Wooden Button */}
       <div className="relative z-30 flex items-center justify-center pointer-events-auto p-4">
         <TapToStartButton onClick={handleStart} className="animate-pulse drop-shadow-[0_20px_40px_rgba(0,0,0,0.85)]" />
+      </div>
+
+      {/* Bottom Floating PWA Offline Install Button */}
+      <div className="absolute bottom-5 inset-x-0 z-30 flex justify-center pointer-events-none px-4">
+        <div className="pointer-events-auto">
+          <PWAInstallButton language={language} variant="floating" />
+        </div>
       </div>
     </div>
   );
