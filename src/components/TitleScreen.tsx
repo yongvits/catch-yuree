@@ -6,6 +6,7 @@ import { PWAInstallButton } from './PWAInstallButton';
 interface TitleScreenProps {
   onStartGame: () => void;
   language?: Language;
+  isOfflineReady?: boolean;
 }
 
 // Helper to resolve asset URLs correctly across local dev, Vite base, and GitHub Pages (e.g. /catch-yuree/)
@@ -227,7 +228,11 @@ export const TapToStartButton: React.FC<{ onClick?: () => void; className?: stri
   );
 };
 
-export const TitleScreen: React.FC<TitleScreenProps> = ({ onStartGame, language = 'th' }) => {
+export const TitleScreen: React.FC<TitleScreenProps> = ({
+  onStartGame,
+  language = 'th',
+  isOfflineReady = false,
+}) => {
   const [isPortrait, setIsPortrait] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
       return window.innerHeight > window.innerWidth;
@@ -339,7 +344,11 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({ onStartGame, language 
       {/* Bottom Floating PWA Offline Install Button */}
       <div className="absolute bottom-5 inset-x-0 z-30 flex justify-center pointer-events-none px-4">
         <div className="pointer-events-auto">
-          <PWAInstallButton language={language} variant="floating" />
+          <PWAInstallButton
+            language={language}
+            variant="floating"
+            isOfflineReady={isOfflineReady}
+          />
         </div>
       </div>
     </div>
