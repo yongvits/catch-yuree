@@ -1,12 +1,28 @@
 import React, { useEffect, useRef, useCallback } from 'react';
-import { RiceGrain, Weevil, Ghost, Particle, FloatingText, HerbItem } from '../types/game';
+import { RiceGrain, Weevil, Ghost, Particle, FloatingText, HerbItem, RitualEffect } from '../types/game';
 import { soundManager } from '../audio/soundManager';
 import { spriteEngine } from '../utils/spriteEngine';
 import { herbEngine } from '../utils/herbEngine';
+import { Language } from '../i18n/translations';
+import {
+  detectHerbFormations,
+  getWeevilsInsideCircle,
+  getWeevilsInYBlast,
+  CircleFormationResult,
+  YFormationResult,
+} from '../utils/herbFormations';
+
+interface HudRect {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+}
 
 interface WeevilCanvasProps {
   totalCount: number;
   isPaused?: boolean;
+  language?: Language;
   ascendedText?: string;
   comboPrefix?: string;
   onCountChange: (remaining: number, total: number) => void;
@@ -18,6 +34,7 @@ interface WeevilCanvasProps {
 export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
   totalCount,
   isPaused = false,
+  language = 'en',
   ascendedText = 'Ascended ✨',
   comboPrefix = 'Combo x',
   onCountChange,
@@ -26,6 +43,14 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
   onMiss,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const hudRectsRef = useRef<HudRect[]>([]);
+  const frameCounterRef = useRef(0);
+  const movedHerbIdsRef = useRef<Set<number>>(new Set());
+  const herbCooldownRef = useRef<Map<number, number>>(new Map());
+  const previewFormationRef = useRef<YFormationResult | CircleFormationResult | null>(null);
+  const armedCircleRef = useRef<CircleFormationResult | null>(null);
+  const languageRef = useRef<Language>(language);
+  languageRef.current = language;
 
   // References for mutable game state
   const stateRef = useRef({
@@ -33,6 +58,7 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
     ghosts: [] as Ghost[],
     particles: [] as Particle[],
     floatingTexts: [] as FloatingText[],
+    ritualEffects: [] as RitualEffect[],
     riceGrains: [] as RiceGrain[],
     herbs: [] as HerbItem[],
     bgCanvas: null as HTMLCanvasElement | null,
@@ -50,6 +76,31 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
     animationFrameId: 0,
     lastActivityTime: performance.now(),
   });
+
+  // Measure [data-hud-zone="true"] elements in canvas coordinates so weevils stay clear of score/HUD
+  const refreshHudRects = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const cRect = canvas.getBoundingClientRect();
+    if (cRect.width <= 0 || cRect.height <= 0) return;
+    const scaleX = canvas.width / cRect.width;
+    const scaleY = canvas.height / cRect.height;
+
+    const nodes = document.querySelectorAll<HTMLElement>('[data-hud-zone="true"]');
+    const rects: HudRect[] = [];
+    nodes.forEach((el) => {
+      const r = el.getBoundingClientRect();
+      if (r.width > 0 && r.height > 0) {
+        rects.push({
+          left: (r.left - cRect.left) * scaleX,
+          top: (r.top - cRect.top) * scaleY,
+          right: (r.right - cRect.left) * scaleX,
+          bottom: (r.bottom - cRect.top) * scaleY,
+        });
+      }
+    });
+    hudRectsRef.current = rects;
+  }, []);
 
   // Multi-touch reference for dragging chili, garlic, and kaffir lime leaf simultaneously
   const activeHerbHoldsRef = useRef<
@@ -108,9 +159,10 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
 
   // 1.5 Generate scattered herbs (Chili, Kaffir Lime, Garlic) matching traditional rice sack repellents
   const generateHerbs = useCallback((width: number, height: number) => {
+    refreshHudRects();
     const items: HerbItem[] = [];
-    const count = Math.max(7, Math.min(12, Math.floor((width * height) / 85000) + 4));
-    const pad = 48;
+    const count = Math.max(8, Math.min(14, Math.floor((width * height) / 72000) + 5));
+    const pad = 58;
 
     // Guaranteed diverse mix of chilies (0..3), kaffir lime leaves (4..7), and garlic cloves (8..11)
     const herbPool: { frame: number; cat: 'chili' | 'lime' | 'garlic'; baseScale: number }[] = [];
@@ -134,6 +186,8 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
       }
     }
 
+    const hudRects = hudRectsRef.current;
+
     for (let i = 0; i < herbPool.length; i++) {
       const hInfo = herbPool[i];
       let hx = 0;
@@ -141,14 +195,26 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
       let attempts = 0;
       let tooClose = true;
 
-      while (tooClose && attempts < 150) {
-        hx = pad + Math.random() * (width - pad * 2);
-        hy = pad + Math.random() * (height - pad * 2);
+      while (tooClose && attempts < 180) {
+        hx = pad + Math.random() * Math.max(20, width - pad * 2);
+        hy = pad + Math.random() * Math.max(20, height - pad * 2);
         tooClose = false;
+
+        for (let hi = 0; hi < hudRects.length; hi++) {
+          const hr = hudRects[hi];
+          if (hx >= hr.left - 34 && hx <= hr.right + 34 && hy >= hr.top - 34 && hy <= hr.bottom + 34) {
+            tooClose = true;
+            break;
+          }
+        }
+        if (tooClose) {
+          attempts++;
+          continue;
+        }
 
         for (let j = 0; j < items.length; j++) {
           const other = items[j];
-          if (Math.hypot(hx - other.x, hy - other.y) < 100) {
+          if (Math.hypot(hx - other.x, hy - other.y) < 95) {
             tooClose = true;
             break;
           }
@@ -160,6 +226,8 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
         id: i + 1,
         x: hx,
         y: hy,
+        vx: 0,
+        vy: 0,
         rotation: Math.random() * Math.PI * 2,
         scale: hInfo.baseScale,
         frameIndex: hInfo.frame,
@@ -169,7 +237,11 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
     }
 
     stateRef.current.herbs = items;
-  }, []);
+    movedHerbIdsRef.current.clear();
+    herbCooldownRef.current.clear();
+    previewFormationRef.current = null;
+    armedCircleRef.current = null;
+  }, [refreshHudRects]);
 
   // 2. Render single rice grain
   const drawRiceGrain = (targetCtx: CanvasRenderingContext2D, g: RiceGrain) => {
@@ -246,14 +318,16 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
     });
   }, [initOffscreenCanvas]);
 
-  // 4. Spawn weevils with non-overlapping initial distribution
+  // 4. Spawn weevils with non-overlapping initial distribution (away from edges & score HUD)
   const spawnWeevils = useCallback((count: number) => {
+    refreshHudRects();
     const canvas = canvasRef.current;
     const w = canvas && canvas.width > 0 ? canvas.width : window.innerWidth;
     const h = canvas && canvas.height > 0 ? canvas.height : window.innerHeight;
-    const padding = 35;
+    const edgePadding = Math.min(58, Math.min(w, h) * 0.16);
+    const hudRects = hudRectsRef.current;
 
-    const playableArea = (w - padding * 2) * (h - padding * 2);
+    const playableArea = Math.max(1000, (w - edgePadding * 2) * (h - edgePadding * 2));
     let minDistance = Math.sqrt(playableArea / count) * 0.85;
     minDistance = Math.min(minDistance, 100);
 
@@ -265,10 +339,28 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
       let attempts = 0;
       let tooClose = true;
 
-      while (tooClose && attempts < 200) {
-        spawnX = padding + Math.random() * (w - padding * 2);
-        spawnY = padding + Math.random() * (h - padding * 2);
+      while (tooClose && attempts < 240) {
+        spawnX = edgePadding + Math.random() * Math.max(20, w - edgePadding * 2);
+        spawnY = edgePadding + Math.random() * Math.max(20, h - edgePadding * 2);
         tooClose = false;
+
+        // Avoid spawning inside or near HUD score/timer elements
+        for (let hi = 0; hi < hudRects.length; hi++) {
+          const hr = hudRects[hi];
+          if (
+            spawnX >= hr.left - 36 &&
+            spawnX <= hr.right + 36 &&
+            spawnY >= hr.top - 36 &&
+            spawnY <= hr.bottom + 36
+          ) {
+            tooClose = true;
+            break;
+          }
+        }
+        if (tooClose) {
+          attempts++;
+          continue;
+        }
 
         for (let j = 0; j < newWeevils.length; j++) {
           const other = newWeevils[j];
@@ -309,6 +401,7 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
     stateRef.current.ghosts = [];
     stateRef.current.particles = [];
     stateRef.current.floatingTexts = [];
+    stateRef.current.ritualEffects = [];
     stateRef.current.remainingCount = count;
     stateRef.current.totalCount = count;
     stateRef.current.combo = 0;
@@ -320,7 +413,7 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
     stateRef.current.isVictoryTriggered = false;
 
     onCountChange(count, count);
-  }, [onCountChange]);
+  }, [onCountChange, refreshHudRects]);
 
   // 5. Draw animated weevil using the 8-frame character spritesheet
   const drawWeevil = (ctx: CanvasRenderingContext2D, w: Weevil) => {
@@ -546,7 +639,7 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
     ctx.restore();
 
     // 2. Aromatic repellent perimeter ring
-    const repelRadius = 82 * h.scale;
+    const repelRadius = 54 * h.scale;
     const auraColor =
       h.category === 'chili'
         ? 'rgba(239, 68, 68, 0.5)'
@@ -575,7 +668,7 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
     ctx.restore();
   };
 
-  // 8. Add floating text on hit/combo
+  // 8. Add floating text on hit/combo/ritual
   const addFloatingText = (x: number, y: number, text: string, color = '#fef08a') => {
     stateRef.current.floatingTexts.push({
       id: Math.random(),
@@ -584,10 +677,236 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
       text,
       color,
       opacity: 1,
-      scale: 1,
-      vy: -1.2,
+      scale: 1.1,
+      vy: -1.1,
     });
   };
+
+  // Shared elimination helper for single squish or multi-bug Y-bomb / Circle capture
+  const eliminateWeevil = useCallback(
+    (w: Weevil, now: number, playIndividualAudio = true) => {
+      if (w.isDying) return false;
+      w.isDying = true;
+      w.opacity = 0.65;
+      w.vx = 0;
+      w.vy = 0;
+
+      createSquishParticles(w.x, w.y);
+
+      if (playIndividualAudio) {
+        soundManager.playSquish();
+      }
+
+      if (now - stateRef.current.lastHitTime < 1400) {
+        stateRef.current.combo++;
+      } else {
+        stateRef.current.combo = 1;
+      }
+      stateRef.current.lastHitTime = now;
+      if (stateRef.current.combo > stateRef.current.maxCombo) {
+        stateRef.current.maxCombo = stateRef.current.combo;
+      }
+
+      if (playIndividualAudio && stateRef.current.combo > 1) {
+        soundManager.playCombo(stateRef.current.combo);
+      }
+
+      stateRef.current.ghostIdCounter++;
+      stateRef.current.ghosts.push({
+        id: stateRef.current.ghostIdCounter,
+        x: w.x,
+        y: w.y,
+        frameIndex: Math.floor(w.legsPhase) % 8,
+        floatSpeed: 0.95 + Math.random() * 0.25,
+        zoomSpeed: 0.011,
+        scale: 1.0,
+        rotation: w.rotation,
+        opacity: 1.0,
+        fadeSpeed: 0.011,
+        wavePhase: Math.random() * Math.PI,
+        wingPhase: Math.random() * 10,
+        size: w.size,
+      });
+
+      if (playIndividualAudio) {
+        const pitchFactor = 1.0 + Math.min(stateRef.current.combo * 0.05, 0.4);
+        soundManager.playGhost(pitchFactor);
+      }
+
+      stateRef.current.remainingCount = Math.max(0, stateRef.current.remainingCount - 1);
+      stateRef.current.successfulHits++;
+
+      onHit?.(stateRef.current.combo);
+      onCountChange(stateRef.current.remainingCount, stateRef.current.totalCount);
+
+      if (stateRef.current.remainingCount <= 0 && !stateRef.current.isVictoryTriggered) {
+        stateRef.current.isVictoryTriggered = true;
+        const elapsed = (performance.now() - stateRef.current.startTime) / 1000;
+        const accuracy = Math.min(
+          100,
+          Math.round((stateRef.current.successfulHits / Math.max(stateRef.current.totalTaps, 1)) * 100)
+        );
+        soundManager.playVictory();
+        setTimeout(() => {
+          onVictory(elapsed, stateRef.current.maxCombo, accuracy);
+        }, 700);
+      }
+
+      return true;
+    },
+    [onCountChange, onHit, onVictory]
+  );
+
+  // Trigger Y-Shape Herb Explosion across blast radius
+  const triggerYExplosion = useCallback(
+    (yForm: YFormationResult) => {
+      const now = performance.now();
+      const targets = getWeevilsInYBlast(yForm, stateRef.current.weevils);
+
+      // Fiery explosion shockwave & Y-rune flash
+      stateRef.current.ritualEffects.push({
+        kind: 'y',
+        x: yForm.center.x,
+        y: yForm.center.y,
+        radius: yForm.blastRadius,
+        progress: 0,
+        points: yForm.tips,
+        junction: yForm.junction,
+      });
+
+      // Explosive fiery embers across the blast radius
+      const fireColors = ['#f97316', '#ef4444', '#facc15', '#fef08a', '#fb923c', '#ffffff'];
+      for (let i = 0; i < 48; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = 3 + Math.random() * 10;
+        stateRef.current.particles.push({
+          x: yForm.center.x + (Math.random() - 0.5) * 24,
+          y: yForm.center.y + (Math.random() - 0.5) * 24,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          size: 2.5 + Math.random() * 4.5,
+          color: fireColors[Math.floor(Math.random() * fireColors.length)],
+          life: 1.0,
+          decay: 0.02 + Math.random() * 0.02,
+        });
+      }
+
+      soundManager.playYExplosion();
+      if (typeof navigator !== 'undefined' && navigator.vibrate) {
+        try {
+          navigator.vibrate([45, 30, 75]);
+        } catch {
+          // ignore
+        }
+      }
+
+      let killed = 0;
+      if (targets.length > 0) {
+        stateRef.current.totalTaps += targets.length;
+        targets.forEach((w) => {
+          if (eliminateWeevil(w, now, false)) killed++;
+        });
+        soundManager.playGhost(1.15);
+      }
+
+      const label =
+        killed > 0
+          ? languageRef.current === 'th'
+            ? `ระเบิดตัว Y! 💥 กำจัด ${killed} ตัว`
+            : `Y-BOMB! 💥 x${killed}`
+          : languageRef.current === 'th'
+          ? 'ระเบิดตัว Y! 💥'
+          : 'Y-BOMB! 💥';
+      addFloatingText(yForm.center.x, yForm.center.y - 16, label, '#fde047');
+
+      // Recoil Y-herbs smoothly outward & put on short cooldown so they don't immediately re-detonate
+      const cooldownEnd = now + 1650;
+      yForm.herbs.forEach((h) => {
+        herbCooldownRef.current.set(h.id, cooldownEnd);
+        const angle = Math.atan2(h.y - yForm.center.y, h.x - yForm.center.x) + (Math.random() - 0.5) * 0.35;
+        const kick = 8 + Math.random() * 4;
+        h.vx = Math.cos(angle) * kick;
+        h.vy = Math.sin(angle) * kick;
+        createHerbSparks(h.x, h.y, h.category, 6);
+      });
+
+      previewFormationRef.current = null;
+      armedCircleRef.current = null;
+    },
+    [eliminateWeevil]
+  );
+
+  // Trigger Circle Herb Trap eliminating all enclosed weevils simultaneously
+  const triggerCircleTrap = useCallback(
+    (circle: CircleFormationResult, targets: Weevil[]) => {
+      const now = performance.now();
+
+      stateRef.current.ritualEffects.push({
+        kind: 'circle',
+        x: circle.center.x,
+        y: circle.center.y,
+        radius: circle.radius,
+        progress: 0,
+        points: circle.orderedPoints,
+      });
+
+      // Mystic emerald-cyan capture sparks
+      const trapColors = ['#34d399', '#38bdf8', '#a7f3d0', '#fde047', '#ffffff'];
+      for (let i = 0; i < 42; i++) {
+        const angle = (i / 42) * Math.PI * 2;
+        const speed = 2.5 + Math.random() * 5.5;
+        stateRef.current.particles.push({
+          x: circle.center.x + Math.cos(angle) * circle.radius * 0.65,
+          y: circle.center.y + Math.sin(angle) * circle.radius * 0.65,
+          vx: Math.cos(angle) * speed * (Math.random() > 0.5 ? 1 : -0.7),
+          vy: Math.sin(angle) * speed * (Math.random() > 0.5 ? 1 : -0.7),
+          size: 2.2 + Math.random() * 3.8,
+          color: trapColors[Math.floor(Math.random() * trapColors.length)],
+          life: 1.0,
+          decay: 0.022 + Math.random() * 0.02,
+        });
+      }
+
+      soundManager.playCircleSeal();
+      if (typeof navigator !== 'undefined' && navigator.vibrate) {
+        try {
+          navigator.vibrate([30, 25, 55]);
+        } catch {
+          // ignore
+        }
+      }
+
+      let killed = 0;
+      if (targets.length > 0) {
+        stateRef.current.totalTaps += targets.length;
+        targets.forEach((w) => {
+          if (eliminateWeevil(w, now, false)) killed++;
+        });
+        soundManager.playGhost(1.1);
+      }
+
+      const label =
+        languageRef.current === 'th'
+          ? `วงกลมจับมอด! ✨ กำจัด ${killed} ตัว`
+          : `CIRCLE TRAP! ✨ x${killed}`;
+      addFloatingText(circle.center.x, circle.center.y - 12, label, '#6ee7b7');
+
+      // Gentle outward scatter & cooldown so circle doesn't repeat on the spot
+      const cooldownEnd = now + 1650;
+      circle.herbs.forEach((h) => {
+        herbCooldownRef.current.set(h.id, cooldownEnd);
+        const angle = Math.atan2(h.y - circle.center.y, h.x - circle.center.x) + (Math.random() - 0.5) * 0.25;
+        const kick = 6 + Math.random() * 3;
+        h.vx = Math.cos(angle) * kick;
+        h.vy = Math.sin(angle) * kick;
+        createHerbSparks(h.x, h.y, h.category, 6);
+      });
+
+      previewFormationRef.current = null;
+      armedCircleRef.current = null;
+    },
+    [eliminateWeevil]
+  );
 
   // 9. Input detection (Touch / Click)
   const handleInput = useCallback(
@@ -599,7 +918,6 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
       const tapX = (clientX - rect.left) * (canvas.width / rect.width);
       const tapY = (clientY - rect.top) * (canvas.height / rect.height);
 
-      stateRef.current.totalTaps++;
       stateRef.current.lastActivityTime = performance.now();
 
       let hitDetected = false;
@@ -614,79 +932,26 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
         const hitRadius = Math.max(22, w.size * spriteEngine.getSizeScale() * 2.3);
 
         if (dist < hitRadius) {
-          w.isDying = true;
-          w.opacity = 0.65;
-          w.vx = 0;
-          w.vy = 0;
-
-          // Bran burst particles
-          createSquishParticles(w.x, w.y);
-
-          // Audio
-          soundManager.playSquish();
-
-          // Combo tracking (within 1.4 seconds)
-          if (now - stateRef.current.lastHitTime < 1400) {
-            stateRef.current.combo++;
-          } else {
-            stateRef.current.combo = 1;
-          }
-          stateRef.current.lastHitTime = now;
-          if (stateRef.current.combo > stateRef.current.maxCombo) {
-            stateRef.current.maxCombo = stateRef.current.combo;
-          }
-
-          // Combo sound tracking (no floating text per user request)
-          if (stateRef.current.combo > 1) {
-            soundManager.playCombo(stateRef.current.combo);
-          }
-
-          // Released ghost (ตัวใหญ่ขึ้นมาอีก 2 เท่า และลอยขึ้น)
-          stateRef.current.ghostIdCounter++;
-          stateRef.current.ghosts.push({
-            id: stateRef.current.ghostIdCounter,
-            x: w.x,
-            y: w.y,
-            frameIndex: Math.floor(w.legsPhase) % 8,
-            floatSpeed: 0.95 + Math.random() * 0.25, // ลอยขึ้นอย่างนุ่มนวล
-            zoomSpeed: 0.011,
-            scale: 1.0,
-            rotation: w.rotation,
-            opacity: 1.0,
-            fadeSpeed: 0.011, // ~1.5 - 1.6 วินาที
-            wavePhase: Math.random() * Math.PI,
-            wingPhase: Math.random() * 10,
-            size: w.size,
-          });
-
-          // Ghost ascension sound
-          const pitchFactor = 1.0 + Math.min(stateRef.current.combo * 0.05, 0.4);
-          soundManager.playGhost(pitchFactor);
-
-          stateRef.current.remainingCount--;
-          stateRef.current.successfulHits++;
+          stateRef.current.totalTaps++;
+          eliminateWeevil(w, now, true);
           hitDetected = true;
-
-          onHit?.(stateRef.current.combo);
-          onCountChange(stateRef.current.remainingCount, stateRef.current.totalCount);
-
-          if (stateRef.current.remainingCount <= 0) {
-            stateRef.current.isVictoryTriggered = true;
-            const elapsed = (performance.now() - stateRef.current.startTime) / 1000;
-            const accuracy = Math.round(
-              (stateRef.current.successfulHits / Math.max(stateRef.current.totalTaps, 1)) * 100
-            );
-            soundManager.playVictory();
-            setTimeout(() => {
-              onVictory(elapsed, stateRef.current.maxCombo, accuracy);
-            }, 600);
-          }
           break;
         }
       }
 
+      // Check if tap landed directly on an herb item (don't penalize combo or startle bugs if grabbing an herb!)
+      let tappedHerb = false;
+      stateRef.current.herbs.forEach((h) => {
+        const dist = Math.hypot(h.x - tapX, h.y - tapY);
+        if (dist < 44 * h.scale) {
+          tappedHerb = true;
+          createHerbSparks(h.x, h.y, h.category, 6);
+        }
+      });
+
       // Missed: weevils within radius get startled and scurry away!
-      if (!hitDetected) {
+      if (!hitDetected && !tappedHerb) {
+        stateRef.current.totalTaps++;
         stateRef.current.combo = 0;
         soundManager.playStartled();
         onMiss?.();
@@ -703,16 +968,8 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
           }
         });
       }
-
-      // Check if tap hit an herb item (gentle fragrant spark puff effect!)
-      stateRef.current.herbs.forEach((h) => {
-        const dist = Math.hypot(h.x - tapX, h.y - tapY);
-        if (dist < 42 * h.scale) {
-          createHerbSparks(h.x, h.y, h.category, 6);
-        }
-      });
     },
-    [onCountChange, onVictory, onHit, onMiss, ascendedText, comboPrefix]
+    [eliminateWeevil, onMiss]
   );
 
   // Resize canvas and update positions proportionally
@@ -739,11 +996,13 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
       stateRef.current.weevils.forEach((w) => {
         w.x *= scaleX;
         w.y *= scaleY;
-        w.x = Math.max(w.size, Math.min(width - w.size, w.x));
-        w.y = Math.max(w.size, Math.min(height - w.size, w.y));
+        const pad = Math.min(Math.max(52, w.size * 3.2), Math.min(width, height) * 0.16);
+        w.x = Math.max(pad, Math.min(width - pad, w.x));
+        w.y = Math.max(pad, Math.min(height - pad, w.y));
       });
     }
-  }, [generateRiceGrains, generateHerbs, renderOffscreenRice]);
+    refreshHudRects();
+  }, [generateRiceGrains, generateHerbs, renderOffscreenRice, refreshHudRects]);
 
   // Convert client coordinates to canvas coordinates
   const getCanvasCoords = useCallback((clientX: number, clientY: number) => {
@@ -792,6 +1051,8 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
             const target = stateRef.current.herbs.find((h) => h.id === targetId);
             if (target) {
               target.isDragging = true;
+              target.vx = 0;
+              target.vy = 0;
               soundManager.playHerbPick();
               if (typeof navigator !== 'undefined' && navigator.vibrate) {
                 try {
@@ -803,7 +1064,7 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
               createHerbSparks(target.x, target.y, target.category, 12);
             }
           }
-        }, 160); // Fast & responsive 160ms hold for effortless multi-finger drag
+        }, 115); // Snappy 115ms hold for effortless multi-finger arranging
 
         activeHerbHoldsRef.current.set(pointerId, {
           herbId: targetId,
@@ -820,13 +1081,12 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
     []
   );
 
-  // Dragging herb (supports multi-touch simultaneously)
+  // Dragging herb (supports multi-touch simultaneously) & live Y/Circle preview
   const handleHerbMove = useCallback((canvasX: number, canvasY: number, pointerId: number | 'mouse') => {
     const hold = activeHerbHoldsRef.current.get(pointerId);
     if (!hold) return;
 
     if (!hold.isDragging) {
-      // Allow natural finger jitter/wobble while holding before drag engages
       if (Math.hypot(canvasX - hold.startX, canvasY - hold.startY) > 36) {
         if (hold.timer) clearTimeout(hold.timer);
         activeHerbHoldsRef.current.delete(pointerId);
@@ -839,44 +1099,87 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
 
     const herb = stateRef.current.herbs.find((h) => h.id === hold.herbId);
     if (herb) {
-      const pad = 35;
+      const pad = 38;
       herb.x = Math.max(pad, Math.min(canvas.width - pad, canvasX - hold.offsetX));
       herb.y = Math.max(pad, Math.min(canvas.height - pad, canvasY - hold.offsetY));
+      herb.vx = 0;
+      herb.vy = 0;
+      movedHerbIdsRef.current.add(herb.id);
       stateRef.current.lastActivityTime = performance.now();
 
       if (Math.random() < 0.22) {
         createHerbSparks(herb.x, herb.y, herb.category, 1);
       }
+
+      // Update live formation preview (Circle or Y) while dragging
+      const { bestCircle, bestY } = detectHerbFormations(
+        stateRef.current.herbs,
+        movedHerbIdsRef.current,
+        {
+          focusHerbId: herb.id,
+          cooldownUntil: herbCooldownRef.current,
+        }
+      );
+      previewFormationRef.current = bestCircle || bestY || null;
     }
   }, []);
 
-  // Dropping herb (supports multi-touch)
-  const handleHerbEnd = useCallback((pointerId: number | 'mouse') => {
-    const hold = activeHerbHoldsRef.current.get(pointerId);
-    if (!hold) return;
+  // Dropping herb (supports multi-touch) -> detect Y-Bomb or Circle Capture
+  const handleHerbEnd = useCallback(
+    (pointerId: number | 'mouse') => {
+      const hold = activeHerbHoldsRef.current.get(pointerId);
+      if (!hold) return;
 
-    if (hold.timer) {
-      clearTimeout(hold.timer);
-    }
+      if (hold.timer) {
+        clearTimeout(hold.timer);
+      }
 
-    if (hold.isDragging) {
-      const herb = stateRef.current.herbs.find((h) => h.id === hold.herbId);
-      if (herb) {
-        herb.isDragging = false;
-        soundManager.playHerbDrop();
-        if (typeof navigator !== 'undefined' && navigator.vibrate) {
-          try {
-            navigator.vibrate(20);
-          } catch {
-            // ignore
+      if (hold.isDragging) {
+        const herb = stateRef.current.herbs.find((h) => h.id === hold.herbId);
+        if (herb) {
+          herb.isDragging = false;
+          movedHerbIdsRef.current.add(herb.id);
+          soundManager.playHerbDrop();
+          if (typeof navigator !== 'undefined' && navigator.vibrate) {
+            try {
+              navigator.vibrate(20);
+            } catch {
+              // ignore
+            }
+          }
+          createHerbSparks(herb.x, herb.y, herb.category, 8);
+
+          // Check if player just completed a Circle Trap or Y-Shape Explosion
+          const { bestCircle, bestY } = detectHerbFormations(
+            stateRef.current.herbs,
+            movedHerbIdsRef.current,
+            {
+              focusHerbId: herb.id,
+              cooldownUntil: herbCooldownRef.current,
+            }
+          );
+
+          if (bestCircle) {
+            const trapped = getWeevilsInsideCircle(bestCircle, stateRef.current.weevils);
+            if (trapped.length > 0) {
+              triggerCircleTrap(bestCircle, trapped);
+            } else {
+              // Keep circle trap armed so bugs wandering inside get captured!
+              armedCircleRef.current = bestCircle;
+              previewFormationRef.current = bestCircle;
+            }
+          } else if (bestY) {
+            triggerYExplosion(bestY);
+          } else {
+            previewFormationRef.current = null;
           }
         }
-        createHerbSparks(herb.x, herb.y, herb.category, 8);
       }
-    }
 
-    activeHerbHoldsRef.current.delete(pointerId);
-  }, []);
+      activeHerbHoldsRef.current.delete(pointerId);
+    },
+    [triggerCircleTrap, triggerYExplosion]
+  );
 
   // Main game update & loop
   useEffect(() => {
@@ -992,53 +1295,147 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
             w.x += w.vx;
             w.y += w.vy;
 
-            // Natural herbal repellent behavior: weevils strongly dislike pungent chili, garlic, and lime
-            // If weevil gets close, it flees immediately at full sprint speed ("วิ่งไปเลย"!)
+            // Natural herbal repellent behavior: weevils dislike chili, garlic, and lime
+            // Tightened slightly while dragging so players can encircle bugs cleanly
             for (let hi = 0; hi < stateRef.current.herbs.length; hi++) {
               const herb = stateRef.current.herbs[hi];
               const hdx = w.x - herb.x;
               const hdy = w.y - herb.y;
               const hDist = Math.hypot(hdx, hdy);
-              const repelRadius = 82 * herb.scale; // Expanded aromatic deterrence radius (~75-95px)
+              const repelRadius = (herb.isDragging ? 52 : 64) * herb.scale;
 
               if (hDist < repelRadius && hDist > 0) {
-                // Panicked sprint mode: wake up from idle pause immediately and scamper rapidly away
                 w.idlePauseTimer = 0;
-                w.scurryTimer = Math.max(w.scurryTimer, 75);
-                const angle = Math.atan2(hdy, hdx) + (Math.random() - 0.5) * 0.35;
+                w.scurryTimer = Math.max(w.scurryTimer, 65);
+                const angle = Math.atan2(hdy, hdx) + (Math.random() - 0.5) * 0.3;
                 const urgency = 1 - hDist / repelRadius;
-                const fleeSpeed = w.baseSpeed * (3.2 + urgency * 2.2); // Noticeably rapid sprint
+                const fleeSpeed = w.baseSpeed * (2.6 + urgency * 1.8);
                 w.vx = Math.cos(angle) * fleeSpeed;
                 w.vy = Math.sin(angle) * fleeSpeed;
-                w.changeDirTimer = 55 + Math.random() * 45;
+                w.changeDirTimer = 50 + Math.random() * 40;
 
-                // Subtle aromatic repellent spark if very close
-                if (hDist < 38 * herb.scale && Math.random() < 0.1) {
+                if (hDist < 34 * herb.scale && Math.random() < 0.08) {
                   createHerbSparks(herb.x, herb.y, herb.category, 1);
                 }
               }
             }
 
-            const pad = w.size;
-            if (w.x < pad) {
-              w.x = pad;
-              w.vx *= -1;
-              w.changeDirTimer = 0;
+            // 1. Stay clearly away from all 4 screen edges (ห้ามเดินชิดขอบจอ)
+            const edgePad = Math.min(
+              Math.max(54, w.size * 3.4),
+              Math.min(canvas.width, canvas.height) * 0.18
+            );
+            const steerMargin = 18;
+
+            // Gentle inward steering near screen border so movement looks natural
+            if (w.x < edgePad + steerMargin && w.vx < 0) w.vx += 0.08;
+            if (w.x > canvas.width - edgePad - steerMargin && w.vx > 0) w.vx -= 0.08;
+            if (w.y < edgePad + steerMargin && w.vy < 0) w.vy += 0.08;
+            if (w.y > canvas.height - edgePad - steerMargin && w.vy > 0) w.vy -= 0.08;
+
+            if (w.x < edgePad) {
+              w.x = edgePad;
+              w.vx = Math.abs(w.vx) || w.baseSpeed;
+              w.changeDirTimer = Math.min(w.changeDirTimer, 15);
             }
-            if (w.x > canvas.width - pad) {
-              w.x = canvas.width - pad;
-              w.vx *= -1;
-              w.changeDirTimer = 0;
+            if (w.x > canvas.width - edgePad) {
+              w.x = canvas.width - edgePad;
+              w.vx = -(Math.abs(w.vx) || w.baseSpeed);
+              w.changeDirTimer = Math.min(w.changeDirTimer, 15);
             }
-            if (w.y < pad) {
-              w.y = pad;
-              w.vy *= -1;
-              w.changeDirTimer = 0;
+            if (w.y < edgePad) {
+              w.y = edgePad;
+              w.vy = Math.abs(w.vy) || w.baseSpeed;
+              w.changeDirTimer = Math.min(w.changeDirTimer, 15);
             }
-            if (w.y > canvas.height - pad) {
-              w.y = canvas.height - pad;
-              w.vy *= -1;
-              w.changeDirTimer = 0;
+            if (w.y > canvas.height - edgePad) {
+              w.y = canvas.height - edgePad;
+              w.vy = -(Math.abs(w.vy) || w.baseSpeed);
+              w.changeDirTimer = Math.min(w.changeDirTimer, 15);
+            }
+
+            // 2. Stay clear of score / timer / HUD interface zones (ห้ามเดินชิด interface score)
+            const hudPad = Math.max(30, w.size * 2.1);
+            const hudRects = hudRectsRef.current;
+            for (let hi = 0; hi < hudRects.length; hi++) {
+              const hr = hudRects[hi];
+              const fLeft = hr.left - hudPad;
+              const fTop = hr.top - hudPad;
+              const fRight = hr.right + hudPad;
+              const fBottom = hr.bottom + hudPad;
+
+              if (w.x > fLeft && w.x < fRight && w.y > fTop && w.y < fBottom) {
+                const penLeft = fLeft >= edgePad ? w.x - fLeft : Infinity;
+                const penRight = fRight <= canvas.width - edgePad ? fRight - w.x : Infinity;
+                const penTop = fTop >= edgePad ? w.y - fTop : Infinity;
+                const penBottom = fBottom <= canvas.height - edgePad ? fBottom - w.y : Infinity;
+
+                const minPen = Math.min(penLeft, penRight, penTop, penBottom);
+                if (minPen === penBottom) {
+                  w.y = fBottom;
+                  w.vy = Math.abs(w.vy) || w.baseSpeed;
+                } else if (minPen === penRight) {
+                  w.x = fRight;
+                  w.vx = Math.abs(w.vx) || w.baseSpeed;
+                } else if (minPen === penLeft) {
+                  w.x = fLeft;
+                  w.vx = -(Math.abs(w.vx) || w.baseSpeed);
+                } else if (minPen === penTop) {
+                  w.y = fTop;
+                  w.vy = -(Math.abs(w.vy) || w.baseSpeed);
+                }
+                w.changeDirTimer = Math.min(w.changeDirTimer, 15);
+              }
+            }
+          }
+
+          // Update Herb recoil velocities & check armed Circle Trap
+          const nowTs = performance.now();
+          stateRef.current.herbs.forEach((h) => {
+            if (!h.isDragging && ((h.vx && Math.abs(h.vx) > 0.05) || (h.vy && Math.abs(h.vy) > 0.05))) {
+              h.x += h.vx || 0;
+              h.y += h.vy || 0;
+              h.vx = (h.vx || 0) * 0.84;
+              h.vy = (h.vy || 0) * 0.84;
+
+              const herbPad = 48;
+              h.x = Math.max(herbPad, Math.min(canvas.width - herbPad, h.x));
+              h.y = Math.max(herbPad, Math.min(canvas.height - herbPad, h.y));
+
+              // Keep bounced herbs out of top-left HUD score zone
+              const hudRects = hudRectsRef.current;
+              for (let hi = 0; hi < hudRects.length; hi++) {
+                const hr = hudRects[hi];
+                if (h.x > hr.left - 30 && h.x < hr.right + 30 && h.y > hr.top - 30 && h.y < hr.bottom + 30) {
+                  h.y = Math.min(canvas.height - herbPad, hr.bottom + 32);
+                  h.vy = Math.abs(h.vy || 0);
+                }
+              }
+            }
+          });
+
+          // If an empty Circle Trap is armed, fire automatically as soon as any weevil enters it
+          if (armedCircleRef.current && !stateRef.current.isVictoryTriggered) {
+            const armed = armedCircleRef.current;
+            const allClear = armed.herbs.every(
+              (h) => !h.isDragging && (herbCooldownRef.current.get(h.id) ?? 0) <= nowTs
+            );
+            if (!allClear) {
+              armedCircleRef.current = null;
+            } else {
+              const trapped = getWeevilsInsideCircle(armed, weevils);
+              if (trapped.length > 0) {
+                triggerCircleTrap(armed, trapped);
+              }
+            }
+          }
+
+          // Update Ritual Shockwave / Magic Ring effects
+          for (let i = stateRef.current.ritualEffects.length - 1; i >= 0; i--) {
+            const ef = stateRef.current.ritualEffects[i];
+            ef.progress += ef.kind === 'y' ? 0.032 : 0.036;
+            if (ef.progress >= 1) {
+              stateRef.current.ritualEffects.splice(i, 1);
             }
           }
 
@@ -1098,12 +1495,87 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
           }
         }
 
+        // Periodically refresh HUD bounds so score/expanded menu changes stay synchronized
+        frameCounterRef.current++;
+        if (frameCounterRef.current % 20 === 1) {
+          refreshHudRects();
+        }
+
         // --- RENDER PASS ---
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
         // 1. Background Rice Sack layer
         if (bgCanvas) {
           ctx.drawImage(bgCanvas, 0, 0);
+        }
+
+        // 1.4 Live Formation Preview (Y-Bomb or Armed/Preview Circle Trap)
+        const activeFormation = previewFormationRef.current || armedCircleRef.current;
+        if (activeFormation) {
+          ctx.save();
+          if (activeFormation.kind === 'y') {
+            // Blast radius dashed preview circle
+            ctx.strokeStyle = 'rgba(251, 146, 60, 0.55)';
+            ctx.lineWidth = 2.5;
+            ctx.setLineDash([10, 8]);
+            ctx.beginPath();
+            ctx.arc(activeFormation.center.x, activeFormation.center.y, activeFormation.blastRadius, 0, Math.PI * 2);
+            ctx.stroke();
+
+            const blastGrad = ctx.createRadialGradient(
+              activeFormation.center.x,
+              activeFormation.center.y,
+              15,
+              activeFormation.center.x,
+              activeFormation.center.y,
+              activeFormation.blastRadius
+            );
+            blastGrad.addColorStop(0, 'rgba(251, 191, 36, 0.22)');
+            blastGrad.addColorStop(1, 'rgba(249, 115, 22, 0)');
+            ctx.fillStyle = blastGrad;
+            ctx.beginPath();
+            ctx.arc(activeFormation.center.x, activeFormation.center.y, activeFormation.blastRadius, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Glowing Y beams
+            ctx.setLineDash([]);
+            ctx.strokeStyle = 'rgba(253, 224, 71, 0.9)';
+            ctx.lineWidth = 5;
+            ctx.shadowColor = '#f97316';
+            ctx.shadowBlur = 14;
+            activeFormation.tips.forEach((tip) => {
+              ctx.beginPath();
+              ctx.moveTo(activeFormation.junction.x, activeFormation.junction.y);
+              ctx.lineTo(tip.x, tip.y);
+              ctx.stroke();
+            });
+          } else {
+            // Circle Trap preview / armed ring
+            ctx.strokeStyle = 'rgba(52, 211, 153, 0.8)';
+            ctx.lineWidth = 3;
+            ctx.setLineDash([8, 6]);
+            ctx.shadowColor = '#10b981';
+            ctx.shadowBlur = 14;
+            ctx.beginPath();
+            ctx.arc(activeFormation.center.x, activeFormation.center.y, activeFormation.radius * 1.03, 0, Math.PI * 2);
+            ctx.stroke();
+
+            const trapGrad = ctx.createRadialGradient(
+              activeFormation.center.x,
+              activeFormation.center.y,
+              10,
+              activeFormation.center.x,
+              activeFormation.center.y,
+              activeFormation.radius * 1.05
+            );
+            trapGrad.addColorStop(0, 'rgba(16, 185, 129, 0.18)');
+            trapGrad.addColorStop(1, 'rgba(56, 189, 248, 0.04)');
+            ctx.fillStyle = trapGrad;
+            ctx.beginPath();
+            ctx.arc(activeFormation.center.x, activeFormation.center.y, activeFormation.radius * 1.03, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          ctx.restore();
         }
 
         // 1.5 Background herbs (nestled under foreground rice grains)
@@ -1127,6 +1599,74 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
           .forEach((h) => {
             herbEngine.drawHerb(ctx, h.frameIndex, h.x, h.y, 35 * h.scale, h.rotation);
           });
+
+        // 3.7 Triggered Ritual Effects (Y-Bomb Blast Wave & Circle Seal Vortex)
+        stateRef.current.ritualEffects.forEach((ef) => {
+          const alpha = Math.max(0, 1 - ef.progress);
+          const easeOut = 1 - Math.pow(1 - ef.progress, 3);
+          ctx.save();
+          if (ef.kind === 'y') {
+            const curR = ef.radius * (0.2 + 0.92 * easeOut);
+            const blastGrad = ctx.createRadialGradient(ef.x, ef.y, curR * 0.1, ef.x, ef.y, curR);
+            blastGrad.addColorStop(0, `rgba(254, 240, 138, ${0.55 * alpha})`);
+            blastGrad.addColorStop(0.55, `rgba(249, 115, 22, ${0.42 * alpha})`);
+            blastGrad.addColorStop(1, 'rgba(239, 68, 68, 0)');
+            ctx.fillStyle = blastGrad;
+            ctx.beginPath();
+            ctx.arc(ef.x, ef.y, curR, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.strokeStyle = `rgba(253, 224, 71, ${0.95 * alpha})`;
+            ctx.lineWidth = Math.max(2, 10 * alpha);
+            ctx.shadowColor = '#f97316';
+            ctx.shadowBlur = 24;
+            ctx.beginPath();
+            ctx.arc(ef.x, ef.y, curR, 0, Math.PI * 2);
+            ctx.stroke();
+
+            if (ef.junction) {
+              ctx.strokeStyle = `rgba(255, 255, 255, ${0.9 * alpha})`;
+              ctx.lineWidth = Math.max(2, 7 * alpha);
+              ef.points.forEach((tip) => {
+                ctx.beginPath();
+                ctx.moveTo(ef.junction!.x, ef.junction!.y);
+                ctx.lineTo(tip.x, tip.y);
+                ctx.stroke();
+              });
+            }
+          } else {
+            const curR = ef.radius * (1.08 - 0.15 * ef.progress);
+            const sealGrad = ctx.createRadialGradient(ef.x, ef.y, 4, ef.x, ef.y, curR);
+            sealGrad.addColorStop(0, `rgba(110, 231, 183, ${0.55 * alpha})`);
+            sealGrad.addColorStop(0.7, `rgba(56, 189, 248, ${0.35 * alpha})`);
+            sealGrad.addColorStop(1, 'rgba(16, 185, 129, 0)');
+            ctx.fillStyle = sealGrad;
+            ctx.beginPath();
+            ctx.arc(ef.x, ef.y, curR, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.strokeStyle = `rgba(110, 231, 183, ${0.95 * alpha})`;
+            ctx.lineWidth = Math.max(2, 8 * alpha);
+            ctx.shadowColor = '#34d399';
+            ctx.shadowBlur = 22;
+            ctx.beginPath();
+            ctx.arc(ef.x, ef.y, curR, 0, Math.PI * 2);
+            ctx.stroke();
+
+            if (ef.points.length >= 3) {
+              ctx.strokeStyle = `rgba(255, 255, 255, ${0.8 * alpha})`;
+              ctx.lineWidth = Math.max(1.5, 4 * alpha);
+              ctx.beginPath();
+              ctx.moveTo(ef.points[0].x, ef.points[0].y);
+              for (let pi = 1; pi < ef.points.length; pi++) {
+                ctx.lineTo(ef.points[pi].x, ef.points[pi].y);
+              }
+              ctx.closePath();
+              ctx.stroke();
+            }
+          }
+          ctx.restore();
+        });
 
         // 3.8 Dragged herbs (lifted above everything with elevated shadow & repellent aura, supports multi-touch)
         stateRef.current.herbs
@@ -1228,7 +1768,7 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
       });
       activeHerbHoldsRef.current.clear();
     };
-  }, [totalCount, isPaused, resizeGame, spawnWeevils, getCanvasCoords, handleHerbMove, handleHerbEnd]);
+  }, [totalCount, isPaused, resizeGame, spawnWeevils, getCanvasCoords, handleHerbMove, handleHerbEnd, refreshHudRects, triggerCircleTrap]);
 
   return (
     <canvas

@@ -360,6 +360,7 @@ export default function App() {
         <WeevilCanvas
           key={gameKey}
           totalCount={difficulties[difficulty].count}
+          language={language}
           ascendedText={t.canvasAscended}
           comboPrefix={t.canvasCombo}
           isPaused={showSettings || showKnowledge || showSpriteModal}

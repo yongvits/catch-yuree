@@ -85,6 +85,7 @@ export const GameHUD: React.FC<GameHUDProps> = ({
       <div className="absolute top-3 left-3 md:top-4 md:left-4 z-20 flex flex-wrap items-center gap-2 pointer-events-none">
         {/* Weevil Remaining Counter (Clean - No icon, click 4 times to restore/toggle menu) */}
         <div
+          data-hud-zone="true"
           onClick={handleScoreClick}
           title={isInterfaceHidden ? t.hudHiddenNotice : undefined}
           className={`bg-black/75 backdrop-blur-md border px-3.5 py-1.5 rounded-full shadow-lg flex items-center gap-2 pointer-events-auto text-xs md:text-sm transition cursor-pointer select-none active:scale-95 ${
@@ -116,6 +117,7 @@ export const GameHUD: React.FC<GameHUDProps> = ({
 
         {/* Stopwatch (Clean - Display only, tapping does NOT restore menu) */}
         <div
+          data-hud-zone="true"
           className="bg-black/75 backdrop-blur-md border border-white/10 px-3 py-1.5 rounded-full shadow-lg flex items-center gap-1.5 pointer-events-auto text-xs md:text-sm font-mono text-amber-200 select-none"
         >
           <span className="text-zinc-400 font-sans text-xs">{t.hudTimeLabel}:</span>
@@ -124,14 +126,17 @@ export const GameHUD: React.FC<GameHUDProps> = ({
 
         {/* Combo Indicator (Clean - No icon, shown when UI is visible) */}
         {!isInterfaceHidden && combo > 1 && (
-          <div className="bg-gradient-to-r from-amber-600/90 to-red-600/90 backdrop-blur-md border border-amber-300/40 px-3 py-1 rounded-full shadow-lg flex items-center gap-1.5 pointer-events-auto text-xs font-black text-white animate-pulse">
+          <div
+            data-hud-zone="true"
+            className="bg-gradient-to-r from-amber-600/90 to-red-600/90 backdrop-blur-md border border-amber-300/40 px-3 py-1 rounded-full shadow-lg flex items-center gap-1.5 pointer-events-auto text-xs font-black text-white animate-pulse"
+          >
             <span>{t.canvasCombo}{combo}!</span>
           </div>
         )}
 
         {/* Action Buttons (Rendered only when interface is not hidden) */}
         {!isInterfaceHidden && (
-          <div className="flex flex-wrap items-center gap-1.5 pointer-events-auto">
+          <div data-hud-zone="true" className="flex flex-wrap items-center gap-1.5 pointer-events-auto">
             {/* Title Screen */}
             {onOpenTitle && (
               <button
@@ -213,7 +218,10 @@ export const GameHUD: React.FC<GameHUDProps> = ({
 
       {/* Top Right Tip Banner (Clean - No icon, hidden when interface is hidden) */}
       {!isInterfaceHidden && (
-        <div className="absolute top-3 right-3 md:top-4 md:right-4 z-10 bg-black/55 backdrop-blur-md border border-white/10 px-3.5 py-1.5 rounded-full text-[11px] md:text-xs text-amber-200/90 pointer-events-none shadow-md">
+        <div
+          data-hud-zone="true"
+          className="absolute top-3 right-3 md:top-4 md:right-4 z-10 bg-black/55 backdrop-blur-md border border-white/10 px-3.5 py-1.5 rounded-full text-[11px] md:text-xs text-amber-200/90 pointer-events-none shadow-md"
+        >
           <span>{t.hudTip}</span>
         </div>
       )}

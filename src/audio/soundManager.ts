@@ -206,6 +206,93 @@ class SoundManager {
       // Audio fallback
     }
   }
+
+  // เสียงระเบิดพลังสมุนไพรรูปตัว Y (Y-Shape Blast Explosion)
+  public playYExplosion() {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+
+    try {
+      const t = this.ctx.currentTime;
+
+      // Deep blast impact thump
+      const boom = this.ctx.createOscillator();
+      const boomGain = this.ctx.createGain();
+      boom.connect(boomGain);
+      boomGain.connect(this.ctx.destination);
+      boom.type = 'sawtooth';
+      boom.frequency.setValueAtTime(160, t);
+      boom.frequency.exponentialRampToValueAtTime(34, t + 0.42);
+      boomGain.gain.setValueAtTime(0.36, t);
+      boomGain.gain.exponentialRampToValueAtTime(0.005, t + 0.44);
+      boom.start(t);
+      boom.stop(t + 0.46);
+
+      // Fiery noise / burst filter sweep
+      const bufferSize = Math.floor(this.ctx.sampleRate * 0.38);
+      const noiseBuffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+      const data = noiseBuffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.35));
+      }
+      const noise = this.ctx.createBufferSource();
+      noise.buffer = noiseBuffer;
+      const filter = this.ctx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(1400, t);
+      filter.frequency.exponentialRampToValueAtTime(180, t + 0.38);
+      const noiseGain = this.ctx.createGain();
+      noiseGain.gain.setValueAtTime(0.28, t);
+      noiseGain.gain.exponentialRampToValueAtTime(0.005, t + 0.38);
+      noise.connect(filter);
+      filter.connect(noiseGain);
+      noiseGain.connect(this.ctx.destination);
+      noise.start(t);
+
+      // Power chime accent
+      const chime = this.ctx.createOscillator();
+      const chimeGain = this.ctx.createGain();
+      chime.connect(chimeGain);
+      chimeGain.connect(this.ctx.destination);
+      chime.type = 'triangle';
+      chime.frequency.setValueAtTime(440, t);
+      chime.frequency.exponentialRampToValueAtTime(880, t + 0.18);
+      chimeGain.gain.setValueAtTime(0.14, t);
+      chimeGain.gain.exponentialRampToValueAtTime(0.001, t + 0.24);
+      chime.start(t);
+      chime.stop(t + 0.25);
+    } catch {
+      // Audio fallback
+    }
+  }
+
+  // เสียงวงกลมเวทสมุนไพรจับมอดพร้อมกัน (Circle Trap Seal)
+  public playCircleSeal() {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+
+    try {
+      const t = this.ctx.currentTime;
+      const notes = [523.25, 659.25, 783.99, 1046.5];
+      notes.forEach((freq, idx) => {
+        if (!this.ctx) return;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, t + idx * 0.045);
+        gain.gain.setValueAtTime(0.16, t + idx * 0.045);
+        gain.gain.exponentialRampToValueAtTime(0.002, t + idx * 0.045 + 0.28);
+        osc.start(t + idx * 0.045);
+        osc.stop(t + idx * 0.045 + 0.3);
+      });
+    } catch {
+      // Audio fallback
+    }
+  }
 }
 
 export const soundManager = new SoundManager();

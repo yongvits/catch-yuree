@@ -69,12 +69,24 @@ export interface HerbItem {
   id: number;
   x: number;
   y: number;
+  vx?: number;
+  vy?: number;
   rotation: number;
   scale: number;
   frameIndex: number; // 0..11 (0-3: chili, 4-7: lime leaf, 8-11: garlic)
   category: 'chili' | 'lime' | 'garlic';
   isForeground: boolean;
   isDragging?: boolean;
+}
+
+export interface RitualEffect {
+  kind: 'y' | 'circle';
+  x: number;
+  y: number;
+  radius: number;
+  progress: number; // 0 -> 1
+  points: { x: number; y: number }[];
+  junction?: { x: number; y: number };
 }
 
 export type GameDifficulty = 'easy' | 'normal' | 'hard' | 'extreme';
