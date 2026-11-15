@@ -47,7 +47,6 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
   const frameCounterRef = useRef(0);
   const movedHerbIdsRef = useRef<Set<number>>(new Set());
   const herbCooldownRef = useRef<Map<number, number>>(new Map());
-  const previewFormationRef = useRef<YFormationResult | CircleFormationResult | null>(null);
   const armedCircleRef = useRef<CircleFormationResult | null>(null);
   const languageRef = useRef<Language>(language);
   languageRef.current = language;
@@ -157,32 +156,37 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
     stateRef.current.riceGrains = grains;
   }, []);
 
-  // 1.5 Generate scattered herbs (Chili, Kaffir Lime, Garlic) matching traditional rice sack repellents
+  // 1.5 Generate scattered herbs (Chili, Kaffir Lime, Garlic) with unique sprites & balanced categories
   const generateHerbs = useCallback((width: number, height: number) => {
     refreshHudRects();
     const items: HerbItem[] = [];
-    const count = Math.max(8, Math.min(14, Math.floor((width * height) / 72000) + 5));
+    const count = Math.max(9, Math.min(12, Math.floor((width * height) / 68000) + 6));
     const pad = 58;
 
-    // Guaranteed diverse mix of chilies (0..3), kaffir lime leaves (4..7), and garlic cloves (8..11)
+    const shuffle = <T,>(arr: T[]): T[] => {
+      const copy = [...arr];
+      for (let i = copy.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [copy[i], copy[j]] = [copy[j], copy[i]];
+      }
+      return copy;
+    };
+
+    const chiliFrames = shuffle([0, 1, 2, 3]);
+    const limeFrames = shuffle([4, 5, 6, 7]);
+    const garlicFrames = shuffle([8, 9, 10, 11]);
+
+    // Round-robin balanced deal with 100% unique frameIndex sprites (up to 4 of each category)
     const herbPool: { frame: number; cat: 'chili' | 'lime' | 'garlic'; baseScale: number }[] = [];
-
-    // Guarantee at least two of each category:
-    herbPool.push({ frame: Math.floor(Math.random() * 4), cat: 'chili', baseScale: 1.05 });
-    herbPool.push({ frame: Math.floor(Math.random() * 4), cat: 'chili', baseScale: 0.95 });
-    herbPool.push({ frame: 4 + Math.floor(Math.random() * 4), cat: 'lime', baseScale: 1.0 });
-    herbPool.push({ frame: 4 + Math.floor(Math.random() * 4), cat: 'lime', baseScale: 1.1 });
-    herbPool.push({ frame: 8 + Math.floor(Math.random() * 4), cat: 'garlic', baseScale: 0.9 });
-    herbPool.push({ frame: 8 + Math.floor(Math.random() * 4), cat: 'garlic', baseScale: 1.0 });
-
-    while (herbPool.length < count) {
-      const r = Math.random();
-      if (r < 0.35) {
-        herbPool.push({ frame: Math.floor(Math.random() * 4), cat: 'chili', baseScale: 0.9 + Math.random() * 0.25 });
-      } else if (r < 0.7) {
-        herbPool.push({ frame: 4 + Math.floor(Math.random() * 4), cat: 'lime', baseScale: 0.95 + Math.random() * 0.25 });
+    for (let i = 0; i < count; i++) {
+      const slot = Math.floor(i / 3);
+      const kind = i % 3;
+      if (kind === 0) {
+        herbPool.push({ frame: chiliFrames[slot], cat: 'chili', baseScale: 0.92 + Math.random() * 0.2 });
+      } else if (kind === 1) {
+        herbPool.push({ frame: limeFrames[slot], cat: 'lime', baseScale: 0.95 + Math.random() * 0.2 });
       } else {
-        herbPool.push({ frame: 8 + Math.floor(Math.random() * 4), cat: 'garlic', baseScale: 0.85 + Math.random() * 0.25 });
+        herbPool.push({ frame: garlicFrames[slot], cat: 'garlic', baseScale: 0.88 + Math.random() * 0.2 });
       }
     }
 
@@ -239,7 +243,6 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
     stateRef.current.herbs = items;
     movedHerbIdsRef.current.clear();
     herbCooldownRef.current.clear();
-    previewFormationRef.current = null;
     armedCircleRef.current = null;
   }, [refreshHudRects]);
 
@@ -830,7 +833,6 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
         createHerbSparks(h.x, h.y, h.category, 6);
       });
 
-      previewFormationRef.current = null;
       armedCircleRef.current = null;
     },
     [eliminateWeevil]
@@ -902,7 +904,6 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
         createHerbSparks(h.x, h.y, h.category, 6);
       });
 
-      previewFormationRef.current = null;
       armedCircleRef.current = null;
     },
     [eliminateWeevil]
@@ -1110,17 +1111,6 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
       if (Math.random() < 0.22) {
         createHerbSparks(herb.x, herb.y, herb.category, 1);
       }
-
-      // Update live formation preview (Circle or Y) while dragging
-      const { bestCircle, bestY } = detectHerbFormations(
-        stateRef.current.herbs,
-        movedHerbIdsRef.current,
-        {
-          focusHerbId: herb.id,
-          cooldownUntil: herbCooldownRef.current,
-        }
-      );
-      previewFormationRef.current = bestCircle || bestY || null;
     }
   }, []);
 
@@ -1164,14 +1154,11 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
             if (trapped.length > 0) {
               triggerCircleTrap(bestCircle, trapped);
             } else {
-              // Keep circle trap armed so bugs wandering inside get captured!
+              // Keep secret circle trap armed silently until a weevil steps inside!
               armedCircleRef.current = bestCircle;
-              previewFormationRef.current = bestCircle;
             }
           } else if (bestY) {
             triggerYExplosion(bestY);
-          } else {
-            previewFormationRef.current = null;
           }
         }
       }
@@ -1507,75 +1494,6 @@ export const WeevilCanvas: React.FC<WeevilCanvasProps> = ({
         // 1. Background Rice Sack layer
         if (bgCanvas) {
           ctx.drawImage(bgCanvas, 0, 0);
-        }
-
-        // 1.4 Live Formation Preview (Y-Bomb or Armed/Preview Circle Trap)
-        const activeFormation = previewFormationRef.current || armedCircleRef.current;
-        if (activeFormation) {
-          ctx.save();
-          if (activeFormation.kind === 'y') {
-            // Blast radius dashed preview circle
-            ctx.strokeStyle = 'rgba(251, 146, 60, 0.55)';
-            ctx.lineWidth = 2.5;
-            ctx.setLineDash([10, 8]);
-            ctx.beginPath();
-            ctx.arc(activeFormation.center.x, activeFormation.center.y, activeFormation.blastRadius, 0, Math.PI * 2);
-            ctx.stroke();
-
-            const blastGrad = ctx.createRadialGradient(
-              activeFormation.center.x,
-              activeFormation.center.y,
-              15,
-              activeFormation.center.x,
-              activeFormation.center.y,
-              activeFormation.blastRadius
-            );
-            blastGrad.addColorStop(0, 'rgba(251, 191, 36, 0.22)');
-            blastGrad.addColorStop(1, 'rgba(249, 115, 22, 0)');
-            ctx.fillStyle = blastGrad;
-            ctx.beginPath();
-            ctx.arc(activeFormation.center.x, activeFormation.center.y, activeFormation.blastRadius, 0, Math.PI * 2);
-            ctx.fill();
-
-            // Glowing Y beams
-            ctx.setLineDash([]);
-            ctx.strokeStyle = 'rgba(253, 224, 71, 0.9)';
-            ctx.lineWidth = 5;
-            ctx.shadowColor = '#f97316';
-            ctx.shadowBlur = 14;
-            activeFormation.tips.forEach((tip) => {
-              ctx.beginPath();
-              ctx.moveTo(activeFormation.junction.x, activeFormation.junction.y);
-              ctx.lineTo(tip.x, tip.y);
-              ctx.stroke();
-            });
-          } else {
-            // Circle Trap preview / armed ring
-            ctx.strokeStyle = 'rgba(52, 211, 153, 0.8)';
-            ctx.lineWidth = 3;
-            ctx.setLineDash([8, 6]);
-            ctx.shadowColor = '#10b981';
-            ctx.shadowBlur = 14;
-            ctx.beginPath();
-            ctx.arc(activeFormation.center.x, activeFormation.center.y, activeFormation.radius * 1.03, 0, Math.PI * 2);
-            ctx.stroke();
-
-            const trapGrad = ctx.createRadialGradient(
-              activeFormation.center.x,
-              activeFormation.center.y,
-              10,
-              activeFormation.center.x,
-              activeFormation.center.y,
-              activeFormation.radius * 1.05
-            );
-            trapGrad.addColorStop(0, 'rgba(16, 185, 129, 0.18)');
-            trapGrad.addColorStop(1, 'rgba(56, 189, 248, 0.04)');
-            ctx.fillStyle = trapGrad;
-            ctx.beginPath();
-            ctx.arc(activeFormation.center.x, activeFormation.center.y, activeFormation.radius * 1.03, 0, Math.PI * 2);
-            ctx.fill();
-          }
-          ctx.restore();
         }
 
         // 1.5 Background herbs (nestled under foreground rice grains)

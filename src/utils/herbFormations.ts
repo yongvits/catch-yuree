@@ -90,7 +90,7 @@ export function getWeevilsInYBlast(
 }
 
 // Build connected clusters of eligible herbs within linkDist
-function getProximityClusters(herbs: HerbItem[], linkDist = 245): HerbItem[][] {
+function getProximityClusters(herbs: HerbItem[], linkDist = 260): HerbItem[][] {
   const visited = new Set<number>();
   const clusters: HerbItem[][] = [];
 
@@ -112,7 +112,7 @@ function getProximityClusters(herbs: HerbItem[], linkDist = 245): HerbItem[][] {
         }
       }
     }
-    if (cluster.length >= 4) {
+    if (cluster.length >= 6) {
       clusters.push(cluster);
     }
   }
@@ -123,7 +123,7 @@ function getProximityClusters(herbs: HerbItem[], linkDist = 245): HerbItem[][] {
 function getCandidateSubsets(
   cluster: HerbItem[],
   focusHerbId?: number,
-  maxPool = 9
+  maxPool = 11
 ): HerbItem[][] {
   let pool = cluster;
   if (focusHerbId !== undefined) {
@@ -138,16 +138,19 @@ function getCandidateSubsets(
     const restCount = others.length;
     const subsets: HerbItem[][] = [];
     const totalMasks = 1 << restCount;
-    for (let mask = 1; mask < totalMasks; mask++) {
+    for (let mask = 31; mask < totalMasks; mask++) {
+      // Need at least 5 bits in mask (+ focus = 6 items)
+      let bits = 0;
+      for (let m = mask; m; m &= m - 1) bits++;
+      if (bits < 5) continue;
+
       const sub: HerbItem[] = [focus];
       for (let bit = 0; bit < restCount; bit++) {
         if ((mask & (1 << bit)) !== 0) {
           sub.push(others[bit]);
         }
       }
-      if (sub.length >= 4) {
-        subsets.push(sub);
-      }
+      subsets.push(sub);
     }
     return subsets;
   }
@@ -158,18 +161,37 @@ function getCandidateSubsets(
   const n = pool.length;
   const subsets: HerbItem[][] = [];
   const totalMasks = 1 << n;
-  for (let mask = 15; mask < totalMasks; mask++) {
+  for (let mask = 63; mask < totalMasks; mask++) {
+    let bits = 0;
+    for (let m = mask; m; m &= m - 1) bits++;
+    if (bits < 6) continue;
+
     const sub: HerbItem[] = [];
     for (let bit = 0; bit < n; bit++) {
       if ((mask & (1 << bit)) !== 0) {
         sub.push(pool[bit]);
       }
     }
-    if (sub.length >= 4) {
-      subsets.push(sub);
-    }
+    subsets.push(sub);
   }
   return subsets;
+}
+
+function hasAllCategoriesAndUniqueFrames(subset: HerbItem[]): boolean {
+  let hasChili = false;
+  let hasLime = false;
+  let hasGarlic = false;
+  const seenFrames = new Set<number>();
+
+  for (const h of subset) {
+    if (seenFrames.has(h.frameIndex)) return false;
+    seenFrames.add(h.frameIndex);
+    if (h.category === 'chili') hasChili = true;
+    else if (h.category === 'lime') hasLime = true;
+    else if (h.category === 'garlic') hasGarlic = true;
+  }
+
+  return hasChili && hasLime && hasGarlic;
 }
 
 function matchCircleSubset(
@@ -177,12 +199,12 @@ function matchCircleSubset(
   allHerbs: HerbItem[],
   movedHerbIds: Set<number>
 ): CircleFormationResult | null {
-  if (subset.length < 4) return null;
+  if (subset.length < 6) return null;
 
   const movedCount = subset.reduce((acc, h) => acc + (movedHerbIds.has(h.id) ? 1 : 0), 0);
-  if (subset.length === 4 ? movedCount < 2 : movedCount < 1) {
-    return null;
-  }
+  if (movedCount < 3) return null;
+
+  if (!hasAllCategoriesAndUniqueFrames(subset)) return null;
 
   let cx = 0;
   let cy = 0;
@@ -196,25 +218,25 @@ function matchCircleSubset(
 
   const radii = subset.map((h) => Math.hypot(h.x - cx, h.y - cy));
   const meanR = radii.reduce((a, b) => a + b, 0) / radii.length;
-  if (meanR < 48 || meanR > 290) return null;
+  if (meanR < 65 || meanR > 310) return null;
 
   let relDevSum = 0;
   for (const r of radii) {
     const ratio = r / meanR;
-    if (ratio < 0.54 || ratio > 1.48) return null;
+    if (ratio < 0.56 || ratio > 1.46) return null;
     relDevSum += Math.abs(r - meanR) / meanR;
   }
   const meanRelDev = relDevSum / radii.length;
-  if (meanRelDev > 0.28) return null;
+  if (meanRelDev > 0.27) return null;
 
-  // Center must be hollow (no herb sitting inside the ring, distinguishing Circle from Y-shape)
+  // Center must be hollow (no herb sitting inside the ring)
   for (const h of allHerbs) {
     if (Math.hypot(h.x - cx, h.y - cy) < meanR * 0.52) {
       return null;
     }
   }
 
-  // Sort items around center to verify closed perimeter angular coverage
+  // Sort items around center and enforce non-repeating adjacent categories
   const withAngle = subset
     .map((h) => ({
       herb: h,
@@ -225,22 +247,25 @@ function matchCircleSubset(
   let maxGap = 0;
   let minGap = Infinity;
   for (let i = 0; i < withAngle.length; i++) {
-    const cur = withAngle[i].angle;
-    const next =
-      i + 1 < withAngle.length
-        ? withAngle[i + 1].angle
-        : withAngle[0].angle + Math.PI * 2;
-    const gap = next - cur;
+    const curItem = withAngle[i];
+    const nextItem = withAngle[(i + 1) % withAngle.length];
+
+    // Adjacent items around the circle must NOT be the same category
+    if (curItem.herb.category === nextItem.herb.category) {
+      return null;
+    }
+
+    const nextAngle = i + 1 < withAngle.length ? nextItem.angle : nextItem.angle + Math.PI * 2;
+    const gap = nextAngle - curItem.angle;
     if (gap > maxGap) maxGap = gap;
     if (gap < minGap) minGap = gap;
   }
 
-  const maxAllowedGap = subset.length === 4 ? 2.48 : 2.38; // ~142 deg (4), ~136 deg (5+)
-  if (maxGap > maxAllowedGap || minGap < 0.34) {
+  if (maxGap > 2.25 || minGap < 0.28) {
     return null;
   }
 
-  const score = (1 - meanRelDev) * 100 + subset.length * 6;
+  const score = (1 - meanRelDev) * 100 + subset.length * 8;
   return {
     kind: 'circle',
     herbIds: withAngle.map((w) => w.herb.id),
@@ -256,24 +281,22 @@ function matchYSubset(
   subset: HerbItem[],
   movedHerbIds: Set<number>
 ): YFormationResult | null {
-  if (subset.length < 4) return null;
+  if (subset.length < 6) return null;
 
   const movedCount = subset.reduce((acc, h) => acc + (movedHerbIds.has(h.id) ? 1 : 0), 0);
-  if (subset.length === 4 ? movedCount < 2 : movedCount < 1) {
-    return null;
-  }
+  if (movedCount < 3) return null;
+
+  if (!hasAllCategoriesAndUniqueFrames(subset)) return null;
 
   // Generate candidate fork junctions: each herb in subset + midpoints of close pairs
   const junctions: Point2D[] = subset.map((h) => ({ x: h.x, y: h.y }));
-  if (subset.length >= 5) {
-    for (let i = 0; i < subset.length; i++) {
-      for (let j = i + 1; j < subset.length; j++) {
-        if (dist(subset[i], subset[j]) <= 155) {
-          junctions.push({
-            x: (subset[i].x + subset[j].x) * 0.5,
-            y: (subset[i].y + subset[j].y) * 0.5,
-          });
-        }
+  for (let i = 0; i < subset.length; i++) {
+    for (let j = i + 1; j < subset.length; j++) {
+      if (dist(subset[i], subset[j]) <= 155) {
+        junctions.push({
+          x: (subset[i].x + subset[j].x) * 0.5,
+          y: (subset[i].y + subset[j].y) * 0.5,
+        });
       }
     }
   }
@@ -281,14 +304,21 @@ function matchYSubset(
   let best: YFormationResult | null = null;
 
   for (const J of junctions) {
-    // At least one herb must sit near the junction fork itself
-    const nearJunction = subset.some((h) => dist(h, J) <= 78);
-    if (!nearJunction) continue;
+    // Find herb closest to the junction fork
+    let junctionHerb: HerbItem | null = null;
+    let minJDist = Infinity;
+    for (const h of subset) {
+      const d = dist(h, J);
+      if (d < minJDist) {
+        minJDist = d;
+        junctionHerb = h;
+      }
+    }
+    if (!junctionHerb || minJDist > 78) continue;
 
-    // Outer candidate branch tips
     const outerHerbs = subset.filter((h) => {
       const d = dist(h, J);
-      return d >= 48 && d <= 340;
+      return d >= 52 && d <= 360;
     });
     if (outerHerbs.length < 3) continue;
 
@@ -305,8 +335,7 @@ function matchYSubset(
           const minL = Math.min(l1, l2, l3);
           const maxL = Math.max(l1, l2, l3);
 
-          if (subset.length === 4 && maxL > 225) continue;
-          if (maxL / minL > 2.85) continue;
+          if (maxL / minL > 2.9) continue;
 
           // Verify 3 branch angles around J form a Y (gaps between 48 deg and 168 deg)
           const angles = [
@@ -321,37 +350,75 @@ function matchYSubset(
           const minGap = Math.min(g1, g2, g3);
           const maxGap = Math.max(g1, g2, g3);
 
-          // Must clearly spread into 3 distinct branches (not T/line or narrow V)
-          if (minGap < 0.84 || maxGap > (subset.length === 4 ? 2.72 : 2.92)) {
-            continue;
-          }
+          if (minGap < 0.84 || maxGap > 2.92) continue;
 
-          // Verify every herb in subset aligns along one of the 3 segments J->T1, J->T2, J->T3
+          // Partition herbs onto junction vs the 3 branches & verify alignment + alternating non-repeating neighbors
+          const branches: HerbItem[][] = [[], [], []];
+          const centerHerb = minJDist <= 42 ? junctionHerb : null;
           let errSum = 0;
           let allAligned = true;
-          const segTolerance = subset.length === 4 ? 24 : 54;
+          const segTolerance = 54;
 
           for (const h of subset) {
-            const dMin = Math.min(
-              distToSegment(h, J, t1),
-              distToSegment(h, J, t2),
-              distToSegment(h, J, t3)
-            );
+            if (centerHerb && h.id === centerHerb.id) continue;
+
+            const d1 = distToSegment(h, J, t1);
+            const d2 = distToSegment(h, J, t2);
+            const d3 = distToSegment(h, J, t3);
+            const dMin = Math.min(d1, d2, d3);
+
             if (dMin > segTolerance) {
               allAligned = false;
               break;
             }
             errSum += dMin;
-          }
-          if (!allAligned) continue;
 
-          // Ensure no branch ray overlaps nearly opposite-closed chord
-          // Blast centered at the junction & covers generous radius around Y
+            if (dMin === d1) branches[0].push(h);
+            else if (dMin === d2) branches[1].push(h);
+            else branches[2].push(h);
+          }
+
+          if (!allAligned) continue;
+          if (branches[0].length === 0 || branches[1].length === 0 || branches[2].length === 0) {
+            continue;
+          }
+
+          // Enforce non-repeating adjacent categories along each branch and across the junction
+          let validAlternation = true;
+          for (let bi = 0; bi < 3; bi++) {
+            branches[bi].sort((u, v) => dist(u, J) - dist(v, J));
+            const chain = branches[bi];
+            if (centerHerb && chain[0].category === centerHerb.category) {
+              validAlternation = false;
+              break;
+            }
+            for (let k = 0; k + 1 < chain.length; k++) {
+              if (chain[k].category === chain[k + 1].category) {
+                validAlternation = false;
+                break;
+              }
+            }
+            if (!validAlternation) break;
+          }
+
+          // If fork has no single central herb (virtual midpoint), adjacent inner fork herbs must differ
+          if (validAlternation && !centerHerb) {
+            const inner = [branches[0][0], branches[1][0], branches[2][0]];
+            for (let i = 0; i < 3; i++) {
+              for (let j = i + 1; j < 3; j++) {
+                if (dist(inner[i], inner[j]) < 115 && inner[i].category === inner[j].category) {
+                  validAlternation = false;
+                }
+              }
+            }
+          }
+          if (!validAlternation) continue;
+
           const avgErr = errSum / subset.length;
           const angleBalance = 1 - (maxGap - minGap) / Math.PI;
           const score = subset.length * 14 + angleBalance * 25 - avgErr * 0.4;
 
-          const blastRadius = Math.max(225, maxL * 1.42);
+          const blastRadius = Math.max(260, maxL * 1.55);
           const center: Point2D = {
             x: (J.x * 2 + t1.x + t2.x + t3.x) / 5,
             y: (J.y * 2 + t1.y + t2.y + t3.y) / 5,
@@ -378,7 +445,6 @@ function matchYSubset(
     }
   }
 
-  // Prevent unused import lint on normalizeAngle if needed
   void normalizeAngle;
   return best;
 }
@@ -402,11 +468,11 @@ export function detectHerbFormations(
     (h) => !cooldownUntil || (cooldownUntil.get(h.id) ?? 0) <= now
   );
 
-  if (eligible.length < 4 || movedHerbIds.size === 0) {
+  if (eligible.length < 6 || movedHerbIds.size < 3) {
     return { bestCircle: null, bestY: null };
   }
 
-  const clusters = getProximityClusters(eligible, 250);
+  const clusters = getProximityClusters(eligible, 260);
   let bestCircle: CircleFormationResult | null = null;
   let bestY: YFormationResult | null = null;
 
@@ -418,7 +484,7 @@ export function detectHerbFormations(
       continue;
     }
 
-    const subsets = getCandidateSubsets(cluster, options?.focusHerbId, 9);
+    const subsets = getCandidateSubsets(cluster, options?.focusHerbId, 11);
     for (const sub of subsets) {
       const circle = matchCircleSubset(sub, eligible, movedHerbIds);
       if (circle && (!bestCircle || circle.score > bestCircle.score)) {
