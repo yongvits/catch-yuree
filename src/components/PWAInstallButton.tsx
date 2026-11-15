@@ -57,7 +57,7 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-sm rounded-3xl bg-gradient-to-b from-[#2a170e] to-[#1a0d05] border border-amber-500/40 p-6 shadow-2xl text-amber-50 animate-in fade-in zoom-in-95 duration-200"
+        className="w-full max-w-sm max-h-[90dvh] overflow-y-auto rounded-3xl bg-gradient-to-b from-[#2a170e] to-[#1a0d05] border border-amber-500/40 p-6 shadow-2xl text-amber-50 animate-in fade-in zoom-in-95 duration-200"
       >
         <div className="flex items-center justify-between mb-3 border-b border-amber-900/60 pb-3">
           <div className="flex items-center gap-2">

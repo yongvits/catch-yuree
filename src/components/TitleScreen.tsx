@@ -316,7 +316,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
   return (
     <div
       onClick={handleStart}
-      className="fixed inset-0 z-50 w-screen h-screen w-dvw h-dvh overflow-hidden flex items-center justify-center cursor-pointer select-none font-[kanit,sans-serif] bg-black"
+      className="fixed inset-0 z-50 overflow-hidden flex items-center justify-center cursor-pointer select-none font-[kanit,sans-serif] bg-black"
     >
       {/* Title Background:
           - แนวนอน (Landscape): TitleBG.png เต็มหน้าจอ (Full screen)
@@ -365,7 +365,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
       </div>
 
       {/* Bottom Floating PWA Offline Install Button */}
-      <div className="absolute bottom-5 inset-x-0 z-30 flex justify-center pointer-events-none px-4">
+      <div className="absolute bottom-6 pb-[env(safe-area-inset-bottom)] inset-x-0 z-30 flex justify-center pointer-events-none px-4">
         <div className="pointer-events-auto">
           <PWAInstallButton
             language={language}

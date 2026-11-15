@@ -322,7 +322,7 @@ export default function App() {
   };
 
   return (
-    <div className="relative w-screen h-screen overflow-hidden select-none bg-[#1a0d05] font-['Kanit',sans-serif]">
+    <div className="fixed inset-0 overflow-hidden select-none bg-[#1a0d05] font-['Kanit',sans-serif]">
 
       {/* Drag & drop overlay */}
       {isWindowDragging && (
