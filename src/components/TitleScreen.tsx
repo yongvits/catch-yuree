@@ -353,6 +353,8 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
             className={`w-full h-full pointer-events-none select-none block ${
               useContainWithAmbientBg
                 ? "object-contain object-center"
+                : isPortrait
+                ? "object-cover object-[50%_20%]"
                 : "object-cover object-top"
             }`}
           />
