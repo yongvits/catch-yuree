@@ -233,16 +233,25 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
   language = 'th',
   isOfflineReady = false,
 }) => {
-  const [isPortrait, setIsPortrait] = useState<boolean>(() => {
-    if (typeof window !== 'undefined') {
-      return window.innerHeight > window.innerWidth;
+  const [viewport, setViewport] = useState<{ isPortrait: boolean; aspect: number }>(() => {
+    if (typeof window !== 'undefined' && window.innerHeight > 0) {
+      return {
+        isPortrait: window.innerHeight > window.innerWidth,
+        aspect: window.innerWidth / window.innerHeight,
+      };
     }
-    return false;
+    return { isPortrait: false, aspect: 16 / 9 };
   });
+
+  const isPortrait = viewport.isPortrait;
 
   useEffect(() => {
     const handleResize = () => {
-      setIsPortrait(window.innerHeight > window.innerWidth);
+      if (window.innerHeight <= 0) return;
+      setViewport({
+        isPortrait: window.innerHeight > window.innerWidth,
+        aspect: window.innerWidth / window.innerHeight,
+      });
     };
     window.addEventListener('resize', handleResize);
     window.addEventListener('orientationchange', handleResize);
@@ -297,6 +306,13 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
   const currentPortraitSrc = portraitCandidates[portraitIdx];
   const currentLandscapeSrc = landscapeCandidates[landscapeIdx];
 
+  // For extreme near-square or ultra-wide viewports where object-cover would crop critical art,
+  // use object-contain over a blurred ambient backdrop; for iPad (3:4 / 4:3), phones, and standard displays,
+  // use full-bleed object-cover anchored at the top (object-top) so the game logo is never clipped.
+  const useContainWithAmbientBg = isPortrait
+    ? viewport.aspect > 0.86
+    : viewport.aspect > 2.25;
+
   return (
     <div
       onClick={handleStart}
@@ -306,9 +322,18 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
           - แนวนอน (Landscape): TitleBG.png เต็มหน้าจอ (Full screen)
           - แนวตั้ง (Portrait): TitleBG_portrait.png เต็มหน้าจอ (Full screen) */}
       <div className="absolute inset-0 w-full h-full pointer-events-none overflow-hidden select-none bg-black">
+        {useContainWithAmbientBg && (
+          <img
+            src={isPortrait ? currentPortraitSrc : currentLandscapeSrc}
+            alt=""
+            aria-hidden="true"
+            referrerPolicy="no-referrer"
+            className="absolute inset-0 w-full h-full object-cover object-top scale-110 blur-xl opacity-85 pointer-events-none select-none"
+          />
+        )}
         <picture
           key={`${isPortrait ? "portrait" : "landscape"}-${portraitIdx}-${landscapeIdx}`}
-          className="w-full h-full block"
+          className="relative w-full h-full block"
         >
           {/* Portrait orientation: TitleBG_portrait.png */}
           <source
@@ -325,13 +350,11 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
             alt="Squash Yuree! Rice Weevil Smasher"
             referrerPolicy="no-referrer"
             onError={handleImageError}
-            className="w-full h-full object-cover object-center pointer-events-none select-none block"
-            style={{
-              width: "100%",
-              height: "100%",
-              objectFit: "cover",
-              objectPosition: "center center",
-            }}
+            className={`w-full h-full pointer-events-none select-none block ${
+              useContainWithAmbientBg
+                ? "object-contain object-center"
+                : "object-cover object-top"
+            }`}
           />
         </picture>
       </div>
